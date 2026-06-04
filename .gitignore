@@ -1,0 +1,27 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+
+# Run artifacts — every agent run writes a timestamped folder under runs/.
+# Each can be tens of MB of screenshots; keep them local, don't track.
+runs/
+
+# OS noise
+.DS_Store
+
+# Editor noise
+.vscode/
+*.swp
+
+# Claude Code — keep shared project settings (.claude/settings.json),
+# ignore the per-machine personal overrides.
+.claude/settings.local.json

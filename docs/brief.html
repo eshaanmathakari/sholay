@@ -1,0 +1,1163 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>coa-test — a small computer-use agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ---- design tokens (docs/design.md) ------------------------------- */
+  :root[data-theme="dark"] {
+    --bg-base: #0A0A0A;
+    --bg-surface: #161616;
+    --bg-elevated: #1C1C1C;
+    --bg-substrate: #14110E;
+    --border-subtle: #2A2A2A;
+    --border-strong: #3A3A3A;
+    --text-primary: #EDEDED;
+    --text-muted: #888888;
+    --accent-main: #E0E0E0;
+    --accent-warm: #FFB088;
+    --shadow-tilt: rgba(0, 0, 0, 0.5);
+    --noise-opacity: 0.04;
+  }
+  :root[data-theme="light"] {
+    --bg-base: #FDFBF7;
+    --bg-surface: #F2EBE1;
+    --bg-elevated: #EDE4D6;
+    --bg-substrate: #E8DECB;
+    --border-subtle: #E2D9C8;
+    --border-strong: #C9BEA9;
+    --text-primary: #2B2824;
+    --text-muted: #8C857B;
+    --accent-main: #1A1815;
+    --accent-warm: #8B5A3C;
+    --shadow-tilt: rgba(43, 40, 36, 0.15);
+    --noise-opacity: 0;
+  }
+
+  /* ---- reset + base ------------------------------------------------- */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    line-height: 1.6;
+    font-weight: 400;
+    transition: background 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+                color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow-x: hidden;
+  }
+  code, pre, .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+  h1, h2, h3, h4 { letter-spacing: -0.03em; font-weight: 600; line-height: 1.15; }
+  h1 { font-size: clamp(2.5rem, 6vw, 4.5rem); font-weight: 700; }
+  h2 { font-size: clamp(1.75rem, 3.5vw, 2.5rem); }
+  h3 { font-size: 1.25rem; font-weight: 500; }
+  .muted { color: var(--text-muted); }
+
+  /* ---- noise overlay (dark mode only) ------------------------------ */
+  .noise {
+    position: fixed; inset: 0; pointer-events: none; z-index: 1;
+    opacity: var(--noise-opacity);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    animation: noise-shift 8s steps(8) infinite;
+    transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes noise-shift {
+    0% { transform: translate(0, 0); }
+    25% { transform: translate(-3%, 2%); }
+    50% { transform: translate(2%, -3%); }
+    75% { transform: translate(-2%, -2%); }
+    100% { transform: translate(0, 0); }
+  }
+
+  /* ---- top nav + tab strip ----------------------------------------- */
+  nav.top {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    background: color-mix(in srgb, var(--bg-base) 75%, transparent);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .nav-inner {
+    max-width: 1100px; margin: 0 auto;
+    padding: 14px 32px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .brand { font-weight: 600; letter-spacing: -0.02em; font-size: 0.95rem; }
+  .brand .dot { color: var(--text-muted); margin: 0 8px; }
+  .brand .tag { color: var(--text-muted); font-weight: 400; }
+
+  .tabs {
+    display: flex; gap: 4px; padding: 4px;
+    background: var(--bg-surface); border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+  }
+  .tab {
+    background: transparent; color: var(--text-muted);
+    border: none; border-radius: 6px;
+    padding: 6px 16px; font-family: inherit; font-size: 0.85rem; font-weight: 500;
+    cursor: pointer;
+    transition: background 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+                color 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .tab:hover { color: var(--text-primary); }
+  .tab.active {
+    background: var(--bg-elevated); color: var(--text-primary);
+    border: 1px solid var(--border-subtle);
+    padding: 5px 15px; /* preserve box size when border appears */
+  }
+
+  .theme-toggle {
+    background: transparent; color: var(--text-primary);
+    border: 1px solid var(--border-subtle); border-radius: 6px;
+    padding: 6px 14px; font-family: inherit; font-size: 0.85rem; font-weight: 500;
+    cursor: pointer;
+    transition: background 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .theme-toggle:hover { background: var(--bg-surface); border-color: var(--border-strong); }
+
+  /* ---- layout ------------------------------------------------------- */
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; animation: panel-in 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+  @keyframes panel-in {
+    from { opacity: 0; transform: translateY(6px) scale(0.995); }
+    to   { opacity: 1; transform: translateY(0)   scale(1); }
+  }
+
+  section {
+    position: relative; z-index: 2;
+    max-width: 1100px; margin: 0 auto;
+    padding: 96px 32px;
+  }
+  section + section { border-top: 1px solid var(--border-subtle); }
+  .lede { color: var(--text-muted); max-width: 680px; margin-top: 16px; font-size: 1.05rem; }
+
+  /* ---- hero --------------------------------------------------------- */
+  .hero { padding-top: 120px; padding-bottom: 120px; }
+  .hero .eyebrow {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
+    color: var(--text-muted); letter-spacing: 0.05em;
+    padding: 6px 12px; border: 1px solid var(--border-subtle); border-radius: 6px;
+    margin-bottom: 28px;
+  }
+  .hero h1 { max-width: 920px; }
+  .hero .lede { font-size: 1.2rem; max-width: 720px; margin-top: 28px; }
+  .hero .actions { margin-top: 40px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn {
+    display: inline-block;
+    padding: 10px 20px; border-radius: 6px;
+    font-family: inherit; font-size: 0.9rem; font-weight: 500;
+    text-decoration: none; cursor: pointer;
+    transition: background 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+                color 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    border: 1px solid transparent;
+  }
+  .btn-primary { background: var(--accent-main); color: var(--bg-base); border-color: var(--accent-main); }
+  .btn-primary:hover { background: var(--text-primary); }
+  .btn-ghost { background: transparent; color: var(--text-primary); border-color: var(--border-subtle); }
+  .btn-ghost:hover { background: var(--bg-surface); border-color: var(--border-strong); }
+
+  /* ---- section heading --------------------------------------------- */
+  .section-head { margin-bottom: 56px; max-width: 760px; }
+  .section-num {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
+    color: var(--text-muted); letter-spacing: 0.1em;
+    margin-bottom: 16px; text-transform: uppercase;
+  }
+
+  /* ---- card grid ---------------------------------------------------- */
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 28px;
+    transform-style: preserve-3d;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                background 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: transform;
+  }
+  .card .head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 14px; gap: 12px;
+  }
+  .card h3 { font-family: 'JetBrains Mono', monospace; font-size: 1rem; font-weight: 500; }
+  .card .meta { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-muted); }
+  .card p { font-size: 0.95rem; color: var(--text-muted); line-height: 1.55; }
+  .card .role { color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; font-weight: 500; }
+
+  /* ---- workflow flow: linear track + grouped loop + always-on recorder band ---- */
+  .flow-wrap { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 36px 28px; overflow-x: auto; }
+  .flow-row {
+    display: flex; flex-wrap: wrap; align-items: stretch; justify-content: center; gap: 10px;
+  }
+  .fstep {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 14px 16px;
+    min-width: 132px; max-width: 210px; flex: 1 1 132px;
+    display: flex; flex-direction: column; gap: 5px;
+    transition: background 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .fstep .fnum { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text-muted); letter-spacing: 0.05em; }
+  .fstep .ftitle { font-weight: 500; font-size: 0.92rem; }
+  .fstep .fwhat { font-size: 0.76rem; color: var(--text-muted); line-height: 1.4; }
+  .fstep.gate { border-color: var(--accent-warm); }
+  .fstep.gate .fnum { color: var(--accent-warm); }
+  .farrow { align-self: center; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; }
+  .floop-group {
+    position: relative; flex: 2 1 460px;
+    border: 1px dashed var(--accent-warm); border-radius: 10px;
+    padding: 28px 12px 12px; margin-top: 8px;
+    display: flex; flex-wrap: wrap; align-items: stretch; justify-content: center; gap: 10px;
+  }
+  .floop-label {
+    position: absolute; top: -11px; left: 16px;
+    background: var(--bg-surface); padding: 0 8px;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--accent-warm);
+  }
+  .flow-rec {
+    margin-top: 16px;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    background: var(--bg-substrate);
+    border: 1px solid var(--accent-warm); border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .flow-rec .frec-pin {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.68rem;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--bg-base); background: var(--accent-warm);
+    padding: 3px 9px; border-radius: 4px; white-space: nowrap;
+  }
+  .flow-rec .frec-body { font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; }
+
+  /* ---- layered architecture diagram --------------------------------- */
+  .arch {
+    background: var(--bg-surface); border: 1px solid var(--border-subtle);
+    border-radius: 12px; padding: 32px 28px;
+  }
+  .arch-layer {
+    display: grid; grid-template-columns: 110px 1fr;
+    gap: 20px; align-items: stretch;
+    margin-bottom: 8px;
+  }
+  .arch-layer .layer-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+    color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase;
+    padding-top: 16px;
+  }
+  .arch-layer .layer-body {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+  }
+  .arch-box {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 4px;
+    transition: background 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+                border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .arch-box .ab-title {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;
+    color: var(--text-primary); font-weight: 500;
+  }
+  .arch-box .ab-sub {
+    font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;
+  }
+  .arch-box.cross  { border-color: var(--accent-warm); }
+  .arch-box.cross .ab-title { color: var(--accent-warm); }
+  .arch-box.host   { background: transparent; border-style: dashed; }
+  .arch-arrow {
+    grid-column: 2;
+    text-align: center; padding: 6px 0;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+    color: var(--text-muted); letter-spacing: 0.05em;
+  }
+  .arch-arrow::before { content: "↓ "; color: var(--accent-warm); }
+
+  .arch-substrate {
+    margin-top: 18px;
+    background: var(--bg-substrate);
+    border: 1px solid var(--accent-warm);
+    border-radius: 12px;
+    padding: 22px 24px;
+    position: relative;
+  }
+  .arch-substrate::before {
+    content: ""; position: absolute; left: 50%; top: -22px;
+    width: 1px; height: 22px; background: var(--accent-warm); opacity: 0.5;
+  }
+  .arch-substrate .sub-head {
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .arch-substrate .sub-name {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.95rem;
+    color: var(--accent-warm); font-weight: 500;
+  }
+  .arch-substrate .sub-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+    color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .arch-substrate p { color: var(--text-muted); font-size: 0.88rem; line-height: 1.55; }
+  .arch-substrate .outputs {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px;
+  }
+  .arch-substrate .outputs span {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;
+    color: var(--text-primary);
+    padding: 4px 10px;
+    background: var(--bg-base); border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+  }
+  .arch-aside {
+    margin-top: 22px;
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 18px;
+    border: 1px dashed var(--border-strong); border-radius: 8px;
+    color: var(--text-muted); font-size: 0.85rem;
+  }
+  .arch-aside .pin {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+    letter-spacing: 0.08em; color: var(--text-muted); text-transform: uppercase;
+  }
+  .arch-aside .name { font-family: 'JetBrains Mono', monospace; color: var(--text-primary); }
+
+  /* ---- mermaid flowchart -------------------------------------------- */
+  .mmd-wrap {
+    background: var(--bg-surface); border: 1px solid var(--border-subtle);
+    border-radius: 12px; padding: 28px 24px; margin-bottom: 20px;
+    overflow-x: auto;
+  }
+  .mmd-cap {
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+  .mmd-cap .label {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+    color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .mmd-cap .hint { font-size: 0.82rem; color: var(--text-muted); }
+  .mmd-cap .hint b { color: var(--accent-warm); font-weight: 500; }
+  .mmd { min-height: 60px; text-align: center; }
+  .mmd svg { max-width: 100%; height: auto; }
+  /* clickable source links inside the rendered SVG */
+  .mmd .node a, .mmd a { cursor: pointer; }
+  .mmd .node a:hover .label, .mmd .node a:hover tspan { text-decoration: underline; }
+  .mmd-fallback {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+    color: var(--text-muted); padding: 8px 0;
+  }
+
+  /* ---- table -------------------------------------------------------- */
+  .table-wrap {
+    background: var(--bg-surface); border: 1px solid var(--border-subtle);
+    border-radius: 12px; overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 14px 20px; border-bottom: 1px solid var(--border-subtle); }
+  tbody tr:last-child td { border-bottom: none; }
+  th {
+    font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;
+    font-weight: 500; color: var(--text-muted); letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: var(--bg-elevated);
+  }
+  td .mono { font-size: 0.85rem; color: var(--text-primary); }
+  .badge {
+    display: inline-block; padding: 2px 10px; border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; font-weight: 500;
+    border: 1px solid var(--border-subtle);
+  }
+  .badge.blocked { color: #ff6b6b; border-color: #ff6b6b40; background: #ff6b6b15; }
+  .badge.high    { color: var(--accent-warm); border-color: color-mix(in srgb, var(--accent-warm) 35%, transparent); background: color-mix(in srgb, var(--accent-warm) 8%, transparent); }
+  .badge.medium  { color: var(--text-primary); }
+  .badge.low     { color: var(--text-muted); }
+  .badge.observe { color: var(--text-muted); }
+
+  /* ---- transcript --------------------------------------------------- */
+  .transcript {
+    background: var(--bg-surface); border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.83rem;
+    line-height: 1.7; padding: 24px 28px; overflow-x: auto;
+  }
+  .transcript .step { display: block; }
+  .transcript .step .step-num { color: var(--text-muted); }
+  .transcript .step .tool     { color: var(--accent-warm); }
+  .transcript .step .verdict  { color: var(--text-muted); font-style: italic; margin-left: 8px; }
+  .transcript .terminal { color: var(--accent-warm); font-weight: 500; }
+  .verify {
+    margin-top: 18px; padding-top: 18px;
+    border-top: 1px solid var(--border-subtle);
+    color: var(--text-muted); font-size: 0.83rem; line-height: 1.7;
+  }
+  .verify .ok { color: var(--accent-warm); }
+
+  /* ---- footer ------------------------------------------------------- */
+  footer {
+    border-top: 1px solid var(--border-subtle);
+    padding: 40px 32px; text-align: center;
+    color: var(--text-muted); font-size: 0.85rem; line-height: 1.7;
+    position: relative; z-index: 2;
+  }
+  footer a { color: var(--text-primary); text-decoration: none; border-bottom: 1px solid var(--border-subtle); }
+  footer a:hover { border-color: var(--accent-warm); }
+
+  /* ---- mount + helpers --------------------------------------------- */
+  .mount { opacity: 0; transform: scale(0.98) translateY(8px); }
+  .mount.visible {
+    opacity: 1; transform: scale(1) translateY(0);
+    transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .two-col {
+    display: grid; gap: 24px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    align-items: start;
+  }
+  .kv { display: flex; flex-direction: column; gap: 4px; padding: 16px 0; border-bottom: 1px solid var(--border-subtle); }
+  .kv:last-child { border-bottom: none; }
+  .kv .k { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--text-muted); letter-spacing: 0.05em; }
+  .kv .v { color: var(--text-primary); font-size: 0.95rem; }
+
+  /* small inline gloss for technical terms in plain copy */
+  abbr[title] { border-bottom: 1px dotted var(--border-strong); cursor: help; text-decoration: none; }
+
+  /* honor OS "reduce motion": kill the always-on noise animation + heavy transitions */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important; scroll-behavior: auto !important;
+    }
+    .noise { animation: none; }
+  }
+
+  @media (max-width: 720px) {
+    section { padding: 64px 20px; }
+    .nav-inner { padding: 12px 20px; flex-wrap: wrap; }
+    .hero { padding-top: 90px; padding-bottom: 80px; }
+    .arch-layer { grid-template-columns: 1fr; gap: 8px; }
+    .arch-layer .layer-label { padding-top: 0; }
+    .arch-arrow { grid-column: 1; }
+  }
+</style>
+</head>
+<body>
+
+<div class="noise" aria-hidden="true"></div>
+
+<nav class="top">
+  <div class="nav-inner">
+    <span class="brand">
+      coa-test
+      <span class="dot">·</span>
+      <span class="tag">computer-use agent</span>
+    </span>
+    <div class="tabs" role="tablist">
+      <button class="tab active" role="tab" data-target="overview">Overview</button>
+      <button class="tab"        role="tab" data-target="technical">Technical</button>
+    </div>
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">light mode</button>
+  </div>
+</nav>
+
+<!-- =================================================================== -->
+<!-- OVERVIEW TAB                                                         -->
+<!-- =================================================================== -->
+<div class="tab-panel active" id="panel-overview" role="tabpanel">
+
+<section class="hero mount">
+  <span class="eyebrow">v0.2 · macOS · review-gated</span>
+  <h1>A small agent that operates your Mac the way a person does — and asks before it does anything risky.</h1>
+  <p class="lede">
+    Built on Anthropic's Computer Use API. Designed for desktop tasks, not web
+    pages — opens apps, types into native forms, navigates Finder, installs
+    from a <code>.dmg</code>, plays local media. A human reviewer sees and
+    approves any action that could change your machine.
+  </p>
+  <div class="actions">
+    <a class="btn btn-primary" href="#workflow">See how it works</a>
+    <button class="btn btn-ghost" data-jump="technical">Technical detail →</button>
+  </div>
+</section>
+
+<section id="concept" class="mount">
+  <div class="section-head">
+    <div class="section-num">01 / what it is</div>
+    <h2>An agent loop with three checkpoints between the model and your machine.</h2>
+    <p class="lede">
+      Anthropic's Computer Use API lets a model take screenshots, decide one
+      action, run it, and see the result. This project wraps that loop with
+      the parts you actually need to run it on a real Mac: a friendly
+      interactive prompt, reliable host primitives for the brittle stuff, and
+      three review checkpoints so nothing irreversible happens without a
+      person seeing it.
+    </p>
+  </div>
+
+  <div class="two-col">
+    <div class="card tilt">
+      <div class="role">Sees the screen</div>
+      <p>
+        The model receives a screenshot before every decision. Retina pixels
+        are scaled down so it thinks in display points, not raw resolution.
+        It narrates what it sees, then picks one action.
+      </p>
+    </div>
+    <div class="card tilt">
+      <div class="role">Two kinds of tools</div>
+      <p>
+        Vision-driven actions (click, type, drag) handle most UI work. A
+        small set of reliable Mac primitives covers the brittle stuff —
+        mounting a <code>.dmg</code>, copying an app to
+        <span class="mono">/Applications</span>, ejecting a volume.
+      </p>
+    </div>
+    <div class="card tilt">
+      <div class="role">Reviewable by default</div>
+      <p>
+        Risky actions pause for human approval. If the approval dialog can't
+        appear, the run stops and writes a pending record you can clear from
+        another terminal. Every decision lands in an append-only log.
+      </p>
+    </div>
+    <div class="card tilt">
+      <div class="role">Audit trail per run</div>
+      <p>
+        Every run produces numbered screenshots, a markdown transcript, an
+        approvals log, and a final report that separates "the model said it
+        was done" from "the machine verified it" from "a human signed off".
+      </p>
+    </div>
+  </div>
+</section>
+
+<section id="workflow" class="mount">
+  <div class="section-head">
+    <div class="section-num">02 / workflow</div>
+    <h2>The loop, with the checkpoints that interrupt it.</h2>
+    <p class="lede">
+      The model never reaches a tool without passing through risk
+      classification first. In the default mode, observe / low / medium
+      actions pass through; <strong>high-risk</strong> actions ask for human
+      approval; <strong>blocked</strong> actions return an error to the
+      model so it can propose a safer alternative.
+    </p>
+  </div>
+
+  <div class="flow-wrap">
+    <div class="flow-row">
+      <div class="fstep"><span class="fnum">01</span><span class="ftitle">Prompt</span><span class="fwhat">human types a task</span></div>
+      <span class="farrow">→</span>
+      <div class="fstep gate"><span class="fnum">CHECK A</span><span class="ftitle">Plan approval</span><span class="fwhat">opt-in · before the editor hides</span></div>
+      <span class="farrow">→</span>
+      <div class="fstep"><span class="fnum">02</span><span class="ftitle">Hide editor</span><span class="fwhat">activate Finder · first screenshot</span></div>
+      <span class="farrow">→</span>
+      <div class="floop-group">
+        <span class="floop-label">↻ loop until TASK COMPLETE · max 80 steps</span>
+        <div class="fstep"><span class="fnum">03</span><span class="ftitle">Model decides</span><span class="fwhat">one tool call, narrated</span></div>
+        <span class="farrow">→</span>
+        <div class="fstep gate"><span class="fnum">CHECK B</span><span class="ftitle">Risk gate</span><span class="fwhat">classify · ask if high · block dangerous</span></div>
+        <span class="farrow">→</span>
+        <div class="fstep"><span class="fnum">04</span><span class="ftitle">Tool runs</span><span class="fwhat">cursor moves · screenshot</span></div>
+      </div>
+      <span class="farrow">→</span>
+      <div class="fstep gate"><span class="fnum">CHECK C</span><span class="ftitle">Evidence review</span><span class="fwhat">final_report · pass / fail / needs-review</span></div>
+    </div>
+
+    <div class="flow-rec">
+      <span class="frec-pin">always on</span>
+      <span class="frec-body"><span class="mono">recorder.py</span> sits under every step — each action, gate decision and screenshot is written to <span class="mono">runs/&lt;ts&gt;/</span> the moment it happens, not as a separate final "Record" step.</span>
+    </div>
+  </div>
+
+  <div style="margin-top: 40px;" class="two-col">
+    <div class="card tilt">
+      <div class="role">Why three checkpoints, not one</div>
+      <p>
+        Plan approval catches "you misread the task". The per-action gate
+        catches "the right plan, the wrong button". Final review catches
+        "the model said it succeeded but it didn't". Different failure
+        modes, different gates.
+      </p>
+    </div>
+    <div class="card tilt">
+      <div class="role">When the dialog can't show</div>
+      <p>
+        Once the editor is hidden, terminal prompts are invisible. The
+        per-action gate prefers a macOS dialog; if that times out it
+        writes a pending record and surfaces an error to the model. Clear
+        pendings later with the
+        <span class="mono">--approve-pending</span> escape hatch.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section id="safety" class="mount">
+  <div class="section-head">
+    <div class="section-num">03 / safety</div>
+    <h2>Risk taxonomy, enforced in code.</h2>
+    <p class="lede">
+      Every tool call is classified before execution. The gate fires based
+      on the review mode you chose. Blocked actions never execute,
+      regardless of mode — they return a tool error to the model so it can
+      try something safer.
+    </p>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Risk</th>
+          <th>Examples</th>
+          <th style="text-align:center;">off</th>
+          <th style="text-align:center;">high_risk</th>
+          <th style="text-align:center;">every_action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="badge observe">observe</span></td>
+          <td><span class="mono">screenshot · cursor_position · wait · verify_app_installed</span></td>
+          <td style="text-align:center;">run</td>
+          <td style="text-align:center;">run</td>
+          <td style="text-align:center;">run</td>
+        </tr>
+        <tr>
+          <td><span class="badge low">low</span></td>
+          <td><span class="mono">click · scroll · mouse_move · open_path · hide_vscode</span></td>
+          <td style="text-align:center;">run</td>
+          <td style="text-align:center;">run</td>
+          <td style="text-align:center;">ask</td>
+        </tr>
+        <tr>
+          <td><span class="badge medium">medium</span></td>
+          <td><span class="mono">type · key · hold_key · left_click_drag · eject_volume</span></td>
+          <td style="text-align:center;">run</td>
+          <td style="text-align:center;">run</td>
+          <td style="text-align:center;">ask</td>
+        </tr>
+        <tr>
+          <td><span class="badge high">high</span></td>
+          <td><span class="mono">install_app_from_dmg · run_applescript · safe_shell</span></td>
+          <td style="text-align:center;">run</td>
+          <td style="text-align:center;"><strong>ask</strong></td>
+          <td style="text-align:center;"><strong>ask</strong></td>
+        </tr>
+        <tr>
+          <td><span class="badge blocked">blocked</span></td>
+          <td><span class="mono">safe_shell sudo · osascript admin · cmd+q</span></td>
+          <td style="text-align:center;">block</td>
+          <td style="text-align:center;">block</td>
+          <td style="text-align:center;">block</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-top: 40px;" class="two-col">
+    <div class="card tilt">
+      <div class="role">Mac permissions check at startup</div>
+      <p>
+        On launch, the agent probes whether macOS has authorized it to
+        send approval dialogs. If not, you see the exact Settings path
+        to fix it <em>before</em> the editor hides, not after.
+      </p>
+    </div>
+    <div class="card tilt">
+      <div class="role">FAILSAFE always on</div>
+      <p>
+        Slam the cursor into any screen corner to abort the loop. The
+        run's <span class="mono">finally</span> block still writes the
+        final report so the audit trail isn't lost.
+      </p>
+    </div>
+  </div>
+</section>
+
+</div><!-- /panel-overview -->
+
+
+<!-- =================================================================== -->
+<!-- TECHNICAL TAB                                                        -->
+<!-- =================================================================== -->
+<div class="tab-panel" id="panel-technical" role="tabpanel" hidden>
+
+<section class="mount">
+  <div class="section-head">
+    <div class="section-num">01 / architecture</div>
+    <h2>Eight modules, layered top-down. Recorder is the substrate.</h2>
+    <p class="lede">
+      The agent loop drives downward: an entry point hands a task to the
+      orchestrator, which calls Claude, classifies the proposed tool call,
+      runs it, captures a screenshot, and repeats. Every action and every
+      gate decision passes through <span class="mono">recorder.py</span> on
+      its way to disk — the substrate at the bottom of the diagram.
+      <span class="muted">"REPL" below is short for read-eval-print loop — an
+      interactive prompt that runs what you type and waits for the next line,
+      like Python's <span class="mono">&gt;&gt;&gt;</span> shell.</span>
+    </p>
+  </div>
+
+  <div class="mmd-wrap">
+    <div class="mmd-cap">
+      <span class="label">interactive map · modules &amp; data flow</span>
+      <span class="hint"><b>Click any box to open its source file.</b> Solid arrows = the live loop · dotted = side paths.</span>
+    </div>
+    <div class="mmd" id="mmArch"><div class="mmd-fallback">Loading interactive diagram… (needs a network connection for mermaid.js — the annotated diagram further down works fully offline.)</div></div>
+  </div>
+
+  <div class="mmd-wrap">
+    <div class="mmd-cap">
+      <span class="label">interactive map · the request loop</span>
+      <span class="hint"><b>One proposed tool call, gate by gate.</b> Click a node to jump to the function that handles it.</span>
+    </div>
+    <div class="mmd" id="mmLoop"><div class="mmd-fallback">Loading interactive diagram…</div></div>
+  </div>
+
+  <div class="arch">
+
+    <div class="arch-layer">
+      <div class="layer-label">human</div>
+      <div class="layer-body">
+        <div class="arch-box host">
+          <span class="ab-title">Terminal.app / iTerm</span>
+          <span class="ab-sub">a real terminal — not the VSCode one, since the agent hides VSCode mid-run</span>
+        </div>
+      </div>
+    </div>
+    <div class="arch-layer"><div class="layer-label"></div><div class="arch-arrow">launches</div></div>
+
+    <div class="arch-layer">
+      <div class="layer-label">entry</div>
+      <div class="layer-body">
+        <div class="arch-box">
+          <span class="ab-title">agent.py · CLI</span>
+          <span class="ab-sub">one-shot: <span class="mono">agent.py "task"</span> · flags route here</span>
+        </div>
+        <div class="arch-box">
+          <span class="ab-title">interactive.py · REPL</span>
+          <span class="ab-sub">no arg: drops into <span class="mono">task&gt;</span> prompt · slash commands</span>
+        </div>
+      </div>
+    </div>
+    <div class="arch-layer"><div class="layer-label"></div><div class="arch-arrow">calls</div></div>
+
+    <div class="arch-layer">
+      <div class="layer-label">orchestrator</div>
+      <div class="layer-body">
+        <div class="arch-box">
+          <span class="ab-title">agent.run_task</span>
+          <span class="ab-sub">screenshot → Claude API → tool call → gate → execute → record → repeat</span>
+        </div>
+      </div>
+    </div>
+    <div class="arch-layer"><div class="layer-label"></div><div class="arch-arrow">for each proposed tool call</div></div>
+
+    <div class="arch-layer">
+      <div class="layer-label">checkpoints</div>
+      <div class="layer-body">
+        <div class="arch-box cross">
+          <span class="ab-title">review.py · gates A/B/C</span>
+          <span class="ab-sub">classify risk · prompt (terminal or macOS dialog) · file fallback · approvals log</span>
+        </div>
+        <div class="arch-box cross">
+          <span class="ab-title">context_window.py</span>
+          <span class="ab-sub">keep N newest screenshots in API history; older ones become text refs</span>
+        </div>
+      </div>
+    </div>
+    <div class="arch-layer"><div class="layer-label"></div><div class="arch-arrow">if approved · dispatch</div></div>
+
+    <div class="arch-layer">
+      <div class="layer-label">tools</div>
+      <div class="layer-body">
+        <div class="arch-box">
+          <span class="ab-title">computer.* (pyautogui)</span>
+          <span class="ab-sub">click · type · drag · scroll · key · wait — the vision-driven path</span>
+        </div>
+        <div class="arch-box">
+          <span class="ab-title">macos.* · native_actions.py</span>
+          <span class="ab-sub">open_path · install_app_from_dmg · eject · verify · run_applescript · safe_shell</span>
+        </div>
+      </div>
+    </div>
+    <div class="arch-layer"><div class="layer-label"></div><div class="arch-arrow">drives + observes</div></div>
+
+    <div class="arch-layer">
+      <div class="layer-label">host + capture</div>
+      <div class="layer-body">
+        <div class="arch-box host">
+          <span class="ab-title">macOS host</span>
+          <span class="ab-sub">cursor · keyboard · Finder · /Applications · DMG mounts</span>
+        </div>
+        <div class="arch-box">
+          <span class="ab-title">screen.py</span>
+          <span class="ab-sub">screencapture · downscale Retina → 1440×900 points · base64 for the API</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- substrate: recorder.py - everything above writes here -->
+    <div class="arch-substrate">
+      <div class="sub-head">
+        <span class="sub-label">substrate</span>
+        <span class="sub-name">recorder.py</span>
+      </div>
+      <p>
+        Every action, every gate decision, every screenshot from the
+        layers above passes through here on its way to disk. One
+        timestamped folder per run.
+      </p>
+      <div class="outputs">
+        <span>runs/&lt;ts&gt;/transcript.md</span>
+        <span>NNN_action.png</span>
+        <span>review/plan.md</span>
+        <span>review/approvals.{md,jsonl}</span>
+        <span>review/pending-NNN.{json,png}</span>
+        <span>final_report.{md,json}</span>
+      </div>
+    </div>
+
+    <!-- diagnostics.py: off-loop preflight -->
+    <div class="arch-aside">
+      <span class="pin">off-loop</span>
+      <span><span class="name">diagnostics.py</span> — <span class="mono">--diagnose</span> preflight (display size, screencapture size, TCC state, mounted DMGs). No Anthropic calls. Safe to run anytime.</span>
+    </div>
+  </div>
+</section>
+
+<section class="mount">
+  <div class="section-head">
+    <div class="section-num">02 / module reference</div>
+    <h2>One concern per file.</h2>
+    <p class="lede">
+      Slice-by-slice extraction from a single-file prototype. The
+      orchestrator only knows about tool schemas and the loop; everything
+      else is library code with its own tests.
+    </p>
+  </div>
+
+  <div class="grid">
+    <div class="card tilt">
+      <div class="head"><h3>agent.py</h3><span class="meta">22 KB</span></div>
+      <div class="role">Orchestrator</div>
+      <p>Parses args, hosts the <span class="mono">computer</span> + <span class="mono">macos</span> tool schemas, runs the planner, runs the loop, finally-writes the final report.</p>
+    </div>
+    <div class="card tilt">
+      <div class="head"><h3>interactive.py</h3><span class="meta">5.2 KB</span></div>
+      <div class="role">REPL · interactive prompt</div>
+      <p>Lists recent runs with their final-report status. Dispatches <span class="mono">/diagnose</span>, <span class="mono">/approve-pending</span>, <span class="mono">/list</span>, <span class="mono">/help</span>, <span class="mono">/quit</span>.</p>
+    </div>
+    <div class="card tilt">
+      <div class="head"><h3>review.py</h3><span class="meta">22 KB</span></div>
+      <div class="role">Gates · risk taxonomy</div>
+      <p><span class="mono">ReviewPolicy</span>, <span class="mono">classify_risk</span>, the per-action gate, the TCC probe, the file fallback, the <span class="mono">--approve-pending</span> subcommand, the final report.</p>
+    </div>
+    <div class="card tilt">
+      <div class="head"><h3>native_actions.py</h3><span class="meta">6 KB</span></div>
+      <div class="role">macOS host primitives</div>
+      <p><span class="mono">open_path</span>, <span class="mono">hide_vscode</span>, <span class="mono">install_app_from_dmg</span>, <span class="mono">eject_volume</span>, <span class="mono">verify_app_installed</span>, <span class="mono">run_applescript</span>, restricted <span class="mono">safe_shell</span>.</p>
+    </div>
+    <div class="card tilt">
+      <div class="head"><h3>screen.py</h3><span class="meta">1.7 KB</span></div>
+      <div class="role">Capture + downscale</div>
+      <p><span class="mono">screencapture</span> at Retina, downscale to 1440×900 points, base64 encode for the API. Provides <span class="mono">image_block</span> / <span class="mono">text_block</span>.</p>
+    </div>
+    <div class="card tilt">
+      <div class="head"><h3>recorder.py</h3><span class="meta">1 KB · substrate</span></div>
+      <div class="role">Numbered artifacts</div>
+      <p>Writes <span class="mono">001_initial.png</span> … <span class="mono">NNN_action.png</span> plus a markdown <span class="mono">transcript.md</span> per run. One folder per run; the orchestrator and gates both write to it.</p>
+    </div>
+    <div class="card tilt">
+      <div class="head"><h3>context_window.py</h3><span class="meta">1.3 KB</span></div>
+      <div class="role">API history compaction</div>
+      <p><span class="mono">compact_messages(messages, keep_last_images=N)</span> keeps the N newest screenshots in API history, replaces older ones with text refs. Prevents 413 RequestTooLarge.</p>
+    </div>
+    <div class="card tilt">
+      <div class="head"><h3>diagnostics.py</h3><span class="meta">4.6 KB · off-loop</span></div>
+      <div class="role">Preflight, no API calls</div>
+      <p><span class="mono">--diagnose</span> writes display size, screencapture size, TCC state, mounted DMGs, whether VSCode can be hidden. Safe to run anytime.</p>
+    </div>
+  </div>
+</section>
+
+<section class="mount">
+  <div class="section-head">
+    <div class="section-num">03 / runtime</div>
+    <h2>Configuration and token usage.</h2>
+  </div>
+
+  <div class="two-col">
+    <div>
+      <div class="kv"><span class="k">model</span><span class="v">claude-sonnet-4-6 with computer_20251124 tool + custom macos tool</span></div>
+      <div class="kv"><span class="k">beta header</span><span class="v">computer-use-2025-11-24</span></div>
+      <div class="kv"><span class="k">defaults</span><span class="v">max_steps=80 · image_history=4 · review_mode=high_risk</span></div>
+      <div class="kv"><span class="k">runtime</span><span class="v">macOS · Python 3 venv · pyautogui · anthropic SDK · python-dotenv</span></div>
+    </div>
+    <div>
+      <div class="kv"><span class="k">token usage</span><span class="v">sample run · tracked in <span class="mono">final_report.json</span></span></div>
+      <div class="kv"><span class="k">input</span><span class="v" id="tok-input">7</span></div>
+      <div class="kv"><span class="k">output</span><span class="v" id="tok-output">533</span></div>
+      <div class="kv"><span class="k">cache reads</span><span class="v" id="tok-cache">18,114</span></div>
+    </div>
+  </div>
+</section>
+
+</div><!-- /panel-technical -->
+
+<footer>
+  <span class="muted">coa-test</span>
+</footer>
+
+<script>
+  // ---- theme toggle (persisted) ---------------------------------------
+  const root = document.documentElement;
+  const toggle = document.getElementById('themeToggle');
+  const stored = localStorage.getItem('coa-theme');
+  if (stored === 'light' || stored === 'dark') root.setAttribute('data-theme', stored);
+  const syncLabel = () => {
+    toggle.textContent = root.getAttribute('data-theme') === 'dark' ? 'light mode' : 'dark mode';
+  };
+  syncLabel();
+  toggle.addEventListener('click', () => {
+    const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('coa-theme', next);
+    syncLabel();
+    if (window.renderMermaid) window.renderMermaid();  // re-theme diagrams
+  });
+
+  // ---- tab routing (URL hash) -----------------------------------------
+  const tabs   = document.querySelectorAll('.tab');
+  const panels = document.querySelectorAll('.tab-panel');
+  function activate(target) {
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.target === target));
+    panels.forEach(p => {
+      const on = p.id === 'panel-' + target;
+      p.classList.toggle('active', on);
+      p.hidden = !on;
+    });
+    if (location.hash.replace('#', '') !== target) {
+      history.replaceState(null, '', target === 'overview' ? location.pathname : '#' + target);
+    }
+    // Re-arm the mount observer for newly-visible content
+    document.querySelectorAll('.tab-panel.active .mount:not(.visible)').forEach(el => io.observe(el));
+    // Lazily render the architecture diagrams the first time Technical is shown
+    if (target === 'technical' && window.renderMermaid) window.renderMermaid();
+  }
+  tabs.forEach(t => t.addEventListener('click', () => activate(t.dataset.target)));
+  document.querySelectorAll('[data-jump]').forEach(el => {
+    el.addEventListener('click', () => activate(el.dataset.jump));
+  });
+  // On load, respect URL hash
+  const initial = location.hash.replace('#', '');
+  if (initial === 'technical') activate('technical');
+
+  // ---- mount-in observer ----------------------------------------------
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('visible');
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.05 });
+  document.querySelectorAll('.tab-panel.active .mount').forEach(el => io.observe(el));
+
+  // ---- 3D tilt on .tilt cards (rAF-throttled; off for reduced-motion) --
+  const MAX_TILT = 6;
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduceMotion) document.querySelectorAll('.card.tilt').forEach(card => {
+    let frame = null, last = null;
+    card.addEventListener('mousemove', (ev) => {
+      const r = card.getBoundingClientRect();
+      last = { x: (ev.clientX - r.left) / r.width - 0.5, y: (ev.clientY - r.top) / r.height - 0.5 };
+      if (frame) return;                       // coalesce every mousemove into one paint per frame
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        const rotY = (last.x * MAX_TILT * 2).toFixed(2);
+        const rotX = (-last.y * MAX_TILT * 2).toFixed(2);
+        card.style.transform =
+          `perspective(900px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateZ(2px)`;
+        card.style.boxShadow =
+          `${(-last.x * 18).toFixed(1)}px ${(-last.y * 18).toFixed(1)}px 32px var(--shadow-tilt)`;
+      });
+    });
+    card.addEventListener('mouseleave', () => {
+      if (frame) { cancelAnimationFrame(frame); frame = null; }
+      card.style.transform = ''; card.style.boxShadow = '';
+    });
+  });
+</script>
+
+<!-- ---- architecture flowcharts (mermaid.js, themed + clickable) -------- -->
+<script type="module">
+(async () => {
+  let mermaid;
+  try {
+    ({ default: mermaid } = await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'));
+  } catch (e) {
+    console.warn('mermaid failed to load (offline?); static diagram still applies.', e);
+    return; // .mmd-fallback text stays put; the annotated .arch diagram below is the offline view
+  }
+
+  // Pull the current theme's colors straight from the CSS variables so the
+  // diagrams re-skin on the light/dark toggle instead of looking pasted-in.
+  const readVars = () => {
+    const cs = getComputedStyle(document.documentElement);
+    const g = n => cs.getPropertyValue(n).trim();
+    return {
+      bgBase: g('--bg-base'), bgSurface: g('--bg-surface'), bgElevated: g('--bg-elevated'),
+      borderSubtle: g('--border-subtle'), borderStrong: g('--border-strong'),
+      textPrimary: g('--text-primary'), textMuted: g('--text-muted'), accent: g('--accent-warm'),
+    };
+  };
+
+  const themeVars = (v) => ({
+    background: v.bgSurface,
+    primaryColor: v.bgElevated, primaryTextColor: v.textPrimary, primaryBorderColor: v.borderStrong,
+    secondaryColor: v.bgBase, secondaryTextColor: v.textPrimary, secondaryBorderColor: v.borderSubtle,
+    tertiaryColor: v.bgBase, tertiaryTextColor: v.textPrimary, tertiaryBorderColor: v.borderSubtle,
+    mainBkg: v.bgElevated, nodeBorder: v.borderStrong, nodeTextColor: v.textPrimary,
+    lineColor: v.accent, textColor: v.textPrimary, titleColor: v.textPrimary,
+    edgeLabelBackground: v.bgSurface,
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: '13px',
+  });
+
+  // Each clickable box names the symbol + line in its tooltip and links to the file.
+  const buildDefs = (v) => {
+    const ARCH = `flowchart TD
+  HUMAN(["Terminal.app / iTerm"])
+  CLI["agent.py · CLI<br/>argparse · tool schemas"]
+  REPL["interactive.py · REPL<br/>recent runs · slash commands"]
+  RUN["agent.run_task()<br/>the orchestrator loop"]
+  API{{"Anthropic Computer-Use API<br/>claude-sonnet-4-6"}}
+  GATES["review.py · Gates A/B/C<br/>classify_risk · approvals log"]
+  CTX["context_window.py<br/>compact_messages()"]
+  COMP["computer.* · execute_computer()<br/>pyautogui: click · type · drag"]
+  MAC["macos.* · native_actions.py<br/>open_path · install_app_from_dmg · …"]
+  HOST(["macOS host<br/>cursor · Finder · /Applications · DMGs"])
+  SHOOT["screen.py · shoot()<br/>screencapture → downscale → base64"]
+  REC[("recorder.py — substrate<br/>transcript + numbered PNGs")]
+  OUT[/"runs/&lt;ts&gt;/<br/>transcript · approvals · final_report"/]
+  DIAG["diagnostics.py · --diagnose<br/>off-loop preflight · no API calls"]
+
+  HUMAN --> CLI
+  HUMAN --> REPL
+  CLI --> RUN
+  REPL --> RUN
+  RUN -->|messages + screenshot| API
+  API -->|proposed tool call| GATES
+  RUN -.->|trim old screenshots| CTX
+  CTX -.-> API
+  GATES -->|approved| COMP
+  GATES -->|approved| MAC
+  GATES -.->|blocked / rejected| RUN
+  COMP --> HOST
+  MAC --> HOST
+  HOST --> SHOOT
+  SHOOT -->|fresh screenshot| RUN
+  RUN --> REC
+  GATES --> REC
+  REC --> OUT
+  DIAG -.-> OUT
+
+  click CLI "../agent.py" "agent.py — CLI entry, arg parsing & tool schemas (main, line 444)" _blank
+  click REPL "../interactive.py" "interactive.py — run_repl(), line 70" _blank
+  click RUN "../agent.py" "agent.py — run_task() orchestrator loop, line 241" _blank
+  click GATES "../review.py" "review.py — ReviewPolicy, classify_risk(), the three gates" _blank
+  click CTX "../context_window.py" "context_window.py — compact_messages(), line 11" _blank
+  click COMP "../agent.py" "agent.py — execute_computer(), line 71" _blank
+  click MAC "../native_actions.py" "native_actions.py — macOS host primitives" _blank
+  click SHOOT "../screen.py" "screen.py — shoot(), capture + downscale, line 17" _blank
+  click REC "../recorder.py" "recorder.py — per-run artifact recorder" _blank
+  click DIAG "../diagnostics.py" "diagnostics.py — preflight, collect(), line 82" _blank
+  classDef cross stroke:${v.accent},stroke-width:2px;
+  class GATES,CTX cross;`;
+
+    const LOOP = `flowchart TD
+  S(["task entered"]) --> PLAN
+  PLAN["Gate A — request_plan_approval()<br/>optional · before VSCode hides"]
+  PLAN -->|approved / skipped| LOOP
+  PLAN -.->|rejected| STOP(["stop — no actions"])
+  LOOP["run_task loop<br/>compact_messages → model call"]
+  LOOP --> DECIDE{{"model reply:<br/>end_turn or tool_use?"}}
+  DECIDE -->|end_turn| GC
+  DECIDE -->|tool_use| CLS["classify_risk()<br/>observe · low · med · high · blocked"]
+  CLS --> GB["Gate B — require_approval()"]
+  GB -->|blocked| ERR["tool error → model<br/>never executes"]
+  GB -->|dialog unavailable| FF["_file_fallback()<br/>writes pending-NNN.json"]
+  GB -->|approved| EXEC["execute_tool()<br/>computer.* / macos.*"]
+  ERR --> LOOP
+  EXEC --> LOOP
+  FF -.-> STOP
+  GC["Gate C — write_final_report()<br/>+ request_final_review()"]
+  GC --> DONE(["pass / fail / needs-review"])
+
+  click PLAN "../review.py" "review.py — request_plan_approval(), line 260" _blank
+  click LOOP "../agent.py" "agent.py — run_task() step loop, line 293" _blank
+  click CLS "../review.py" "review.py — classify_risk(), line 62" _blank
+  click GB "../review.py" "review.py — require_approval(), line 300" _blank
+  click ERR "../review.py" "review.py — blocked path in require_approval(), line 313" _blank
+  click FF "../review.py" "review.py — _file_fallback(), line 359" _blank
+  click EXEC "../agent.py" "agent.py — execute_tool(), line 168" _blank
+  click GC "../review.py" "review.py — write_final_report() line 483 · request_final_review() line 560" _blank
+  classDef gate stroke:${v.accent},stroke-width:2px;
+  classDef danger stroke:#ff6b6b,stroke-width:2px;
+  class PLAN,GB,GC gate;
+  class ERR,FF danger;`;
+
+    return { ARCH, LOOP };
+  };
+
+  let seq = 0;
+  const renderOne = async (targetId, def) => {
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      const { svg, bindFunctions } = await mermaid.render('mmd-' + (seq++), def);
+      el.innerHTML = svg;
+      if (bindFunctions) bindFunctions(el);
+    } catch (e) {
+      el.innerHTML = '<div class="mmd-fallback">diagram could not render (' +
+        (e && e.message ? e.message : e) + '). The annotated diagram below is the same architecture.</div>';
+    }
+  };
+
+  window.renderMermaid = async () => {
+    const panel = document.getElementById('panel-technical');
+    if (!panel || panel.hidden) return;            // only render when the tab is visible (avoids 0-size SVGs)
+    const v = readVars();
+    mermaid.initialize({
+      startOnLoad: false, securityLevel: 'loose', theme: 'base',
+      themeVariables: themeVars(v),
+      flowchart: { curve: 'basis', htmlLabels: true, useMaxWidth: true, nodeSpacing: 45, rankSpacing: 55 },
+    });
+    const { ARCH, LOOP } = buildDefs(v);
+    await renderOne('mmArch', ARCH);
+    await renderOne('mmLoop', LOOP);
+  };
+
+  // If the page loaded straight onto the Technical tab (e.g. #technical), render now.
+  window.renderMermaid();
+})();
+</script>
+</body>
+</html>

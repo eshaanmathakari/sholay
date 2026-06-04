@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import json,sys,base64; print\\(base64.b64decode\\(json.load\\(sys.stdin\\)['content']\\).decode\\(\\)[:800]\\)\")",
+      "Bash(git clone *)",
+      "Bash(npx -y skills@latest --help)",
+      "Bash(npx -y skills@latest add --help)",
+      "Bash(npx -y skills@latest add mattpocock/skills -g --all)",
+      "Bash(echo \"=== ~/.agents/skills/ \\(central install\\) ===\" *)",
+      "Read(//Users/apple/.agents/skills/**)",
+      "Read(//Users/apple/.agents/skills/handoff/**)",
+      "Bash(.venv/bin/python -m py_compile agent.py recorder.py screen.py native_actions.py context_window.py review.py diagnostics.py)",
+      "Bash(.venv/bin/python -c \"import pytest\")",
+      "Bash(.venv/bin/pip install *)",
+      "Bash(.venv/bin/python -m pytest tests/ -x --tb=short)",
+      "Bash(.venv/bin/python agent.py --help)",
+      "Bash(.venv/bin/python agent.py --diagnose --diagnose-dmg ~/Desktop/gc12.dmg --diagnose-app \"GraphicConverter 12\")"
+    ],
+    "additionalDirectories": [
+      "/tmp",
+      "/private/tmp"
+    ]
+  }
+}
