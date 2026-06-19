@@ -52,9 +52,14 @@
     position: sticky; top: 0; z-index: 50; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
     background: color-mix(in srgb, var(--bg-base) 75%, transparent); border-bottom: 1px solid var(--border-subtle);
   }
-  .nav-inner { max-width: 1100px; margin: 0 auto; padding: 14px 32px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-  .brand { font-weight: 600; letter-spacing: -0.02em; font-size: 0.95rem; }
+  .nav-inner { max-width: 1100px; margin: 0 auto; padding: 14px 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; row-gap: 8px; }
+  .nav-left { display: flex; align-items: center; gap: 18px; }
+  .brand { font-weight: 600; letter-spacing: -0.02em; font-size: 0.95rem; text-decoration: none; color: var(--text-primary); }
   .brand .dot { color: var(--text-muted); margin: 0 8px; } .brand .tag { color: var(--text-muted); font-weight: 400; }
+  .pagenav { display: flex; gap: 2px; }
+  .pagenav a { color: var(--text-muted); text-decoration: none; font-size: 0.85rem; font-weight: 500; padding: 6px 12px; border-radius: 6px; transition: color .25s, background .25s; }
+  .pagenav a:hover { color: var(--text-primary); }
+  .pagenav a.current { color: var(--text-primary); background: var(--bg-surface); border: 1px solid var(--border-subtle); padding: 5px 11px; }
   .tabs { display: flex; gap: 4px; padding: 4px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 8px; }
   .tab { background: transparent; color: var(--text-muted); border: none; border-radius: 6px; padding: 6px 16px; font-family: inherit; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: background .25s cubic-bezier(0.16,1,0.3,1), color .25s cubic-bezier(0.16,1,0.3,1); }
   .tab:hover { color: var(--text-primary); }
@@ -178,7 +183,15 @@
 
 <nav class="top">
   <div class="nav-inner">
-    <span class="brand">coa-test <span class="dot">·</span> <span class="tag">measurement flows</span></span>
+    <div class="nav-left">
+      <a class="brand" href="index.html">coa-test</a>
+      <div class="pagenav">
+        <a href="index.html">Home</a>
+        <a href="brief.html">Agent</a>
+        <a href="flows.html" class="current">Framework</a>
+        <a href="results.html">Results</a>
+      </div>
+    </div>
     <div class="tabs" role="tablist">
       <button class="tab active" role="tab" data-target="overview">Overview</button>
       <button class="tab"        role="tab" data-target="technical">Architecture</button>

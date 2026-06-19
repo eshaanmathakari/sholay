@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>coa-test — review-gated computer-use agent + measurement flows</title>
+<meta name="description" content="A review-gated macOS computer-use agent and a deterministic flow-measurement framework: how reliable, what cost, how many tokens, how long — per flow, per app type." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ---- design tokens (shared with flows.html / brief.html) ---------- */
+  :root[data-theme="dark"] {
+    --bg-base: #0A0A0A; --bg-surface: #161616; --bg-elevated: #1C1C1C; --bg-substrate: #14110E;
+    --border-subtle: #2A2A2A; --border-strong: #3A3A3A;
+    --text-primary: #EDEDED; --text-muted: #888888;
+    --accent-main: #E0E0E0; --accent-warm: #FFB088;
+    --shadow-tilt: rgba(0, 0, 0, 0.5); --noise-opacity: 0.04;
+  }
+  :root[data-theme="light"] {
+    --bg-base: #FDFBF7; --bg-surface: #F2EBE1; --bg-elevated: #EDE4D6; --bg-substrate: #E8DECB;
+    --border-subtle: #E2D9C8; --border-strong: #C9BEA9;
+    --text-primary: #2B2824; --text-muted: #8C857B;
+    --accent-main: #1A1815; --accent-warm: #8B5A3C;
+    --shadow-tilt: rgba(43, 40, 36, 0.15); --noise-opacity: 0;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-base); color: var(--text-primary); line-height: 1.6; font-weight: 400;
+    transition: background 0.4s cubic-bezier(0.16,1,0.3,1), color 0.4s cubic-bezier(0.16,1,0.3,1);
+    overflow-x: hidden;
+  }
+  code, pre, .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  h1, h2, h3, h4 { letter-spacing: -0.03em; font-weight: 600; line-height: 1.15; }
+  h1 { font-size: clamp(2.5rem, 6vw, 4.5rem); font-weight: 700; }
+  h2 { font-size: clamp(1.6rem, 3.2vw, 2.3rem); }
+  h3 { font-size: 1.15rem; font-weight: 500; }
+  .muted { color: var(--text-muted); }
+  a { color: inherit; }
+
+  .noise {
+    position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: var(--noise-opacity);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    animation: noise-shift 8s steps(8) infinite; transition: opacity 0.4s cubic-bezier(0.16,1,0.3,1);
+  }
+  @keyframes noise-shift {
+    0% { transform: translate(0,0); } 25% { transform: translate(-3%,2%); }
+    50% { transform: translate(2%,-3%); } 75% { transform: translate(-2%,-2%); } 100% { transform: translate(0,0); }
+  }
+
+  /* ---- top nav with cross-page switcher ---------------------------- */
+  nav.top {
+    position: sticky; top: 0; z-index: 50; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    background: color-mix(in srgb, var(--bg-base) 75%, transparent); border-bottom: 1px solid var(--border-subtle);
+  }
+  .nav-inner { max-width: 1100px; margin: 0 auto; padding: 14px 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; row-gap: 8px; }
+  .nav-left { display: flex; align-items: center; gap: 18px; }
+  .brand { font-weight: 600; letter-spacing: -0.02em; font-size: 0.95rem; text-decoration: none; color: var(--text-primary); }
+  .pagenav { display: flex; gap: 2px; }
+  .pagenav a { color: var(--text-muted); text-decoration: none; font-size: 0.85rem; font-weight: 500; padding: 6px 12px; border-radius: 6px; transition: color .25s, background .25s; }
+  .pagenav a:hover { color: var(--text-primary); }
+  .pagenav a.current { color: var(--text-primary); background: var(--bg-surface); border: 1px solid var(--border-subtle); padding: 5px 11px; }
+  .theme-toggle { background: transparent; color: var(--text-primary); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 6px 14px; font-family: inherit; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: background .3s, border-color .3s; }
+  .theme-toggle:hover { background: var(--bg-surface); border-color: var(--border-strong); }
+
+  section { position: relative; z-index: 2; max-width: 1100px; margin: 0 auto; padding: 88px 32px; }
+  section + section { border-top: 1px solid var(--border-subtle); }
+  .lede { color: var(--text-muted); max-width: 760px; margin-top: 16px; font-size: 1.05rem; }
+
+  .hero { padding-top: 116px; padding-bottom: 96px; }
+  .hero .eyebrow { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--text-muted); letter-spacing: 0.05em; padding: 6px 12px; border: 1px solid var(--border-subtle); border-radius: 6px; margin-bottom: 28px; }
+  .hero h1 { max-width: 980px; } .hero .lede { font-size: 1.2rem; max-width: 780px; margin-top: 28px; }
+  .hero .actions { margin-top: 40px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn { display: inline-block; padding: 11px 22px; border-radius: 6px; font-family: inherit; font-size: 0.9rem; font-weight: 500; text-decoration: none; cursor: pointer; transition: background .3s, color .3s, border-color .3s; border: 1px solid transparent; }
+  .btn-primary { background: var(--accent-main); color: var(--bg-base); border-color: var(--accent-main); }
+  .btn-primary:hover { background: var(--text-primary); }
+  .btn-ghost { background: transparent; color: var(--text-primary); border-color: var(--border-subtle); }
+  .btn-ghost:hover { background: var(--bg-surface); border-color: var(--border-strong); }
+
+  .section-head { margin-bottom: 44px; max-width: 820px; }
+  .section-num { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--text-muted); letter-spacing: 0.1em; margin-bottom: 16px; text-transform: uppercase; }
+
+  /* ---- headline stat strip ----------------------------------------- */
+  .stats { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; }
+  .stat { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 18px 22px; min-width: 150px; flex: 1 1 150px; }
+  .stat .n { font-size: 1.9rem; font-weight: 700; letter-spacing: -0.03em; }
+  .stat .n .warm { color: var(--accent-warm); }
+  .stat .l { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text-muted); letter-spacing: 0.05em; text-transform: uppercase; margin-top: 4px; }
+
+  /* ---- manager-headline table -------------------------------------- */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border-subtle); border-radius: 12px; margin-top: 28px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  thead th { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 500; text-align: left; padding: 14px 18px; background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); }
+  tbody td { padding: 14px 18px; border-bottom: 1px solid var(--border-subtle); color: var(--text-primary); }
+  tbody tr:last-child td { border-bottom: none; }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .table-note { font-size: 0.82rem; color: var(--text-muted); margin-top: 12px; }
+  .table-note a { color: var(--accent-warm); text-decoration: none; border-bottom: 1px solid var(--border-subtle); }
+
+  /* ---- route cards ------------------------------------------------- */
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-top: 8px; }
+  a.route { display: flex; flex-direction: column; gap: 10px; text-decoration: none; color: inherit; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 28px; transition: transform .2s cubic-bezier(0.16,1,0.3,1), border-color .3s, background .3s; }
+  a.route:hover { transform: translateY(-3px); border-color: var(--accent-warm); }
+  a.route .rn { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; }
+  a.route h3 { font-size: 1.25rem; font-weight: 600; }
+  a.route p { font-size: 0.92rem; color: var(--text-muted); line-height: 1.55; flex: 1; }
+  a.route .go { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; color: var(--accent-warm); }
+
+  /* ---- requirements strip ------------------------------------------ */
+  .reqs { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: 8px; }
+  .req { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 20px 22px; }
+  .req .rt { font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; font-weight: 500; margin-bottom: 6px; }
+  .req .rd { font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; }
+  .req.warm { border-color: var(--accent-warm); }
+  .req.warm .rt { color: var(--accent-warm); }
+  .kvline { font-size: 0.86rem; color: var(--text-muted); margin-top: 18px; line-height: 1.7; }
+  .kvline b { color: var(--text-primary); font-weight: 500; }
+
+  footer { border-top: 1px solid var(--border-subtle); padding: 40px 32px; text-align: center; color: var(--text-muted); font-size: 0.85rem; line-height: 1.7; position: relative; z-index: 2; }
+  footer a { color: var(--text-primary); text-decoration: none; border-bottom: 1px solid var(--border-subtle); }
+  footer a:hover { border-color: var(--accent-warm); }
+</style>
+</head>
+<body>
+<div class="noise"></div>
+
+<nav class="top">
+  <div class="nav-inner">
+    <div class="nav-left">
+      <a class="brand" href="index.html">coa-test</a>
+      <div class="pagenav">
+        <a href="index.html" class="current">Home</a>
+        <a href="brief.html">Agent</a>
+        <a href="flows.html">Framework</a>
+        <a href="results.html">Results</a>
+      </div>
+    </div>
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">light mode</button>
+  </div>
+</nav>
+
+<!-- =================================================================== -->
+<!-- HERO                                                                 -->
+<!-- =================================================================== -->
+<section class="hero">
+  <span class="eyebrow">macOS · review-gated · measured</span>
+  <h1>A computer-use agent you can trust — and prove.</h1>
+  <p class="lede">
+    A review-gated macOS agent that operates the desktop the way a person does, paired with a
+    deterministic measurement framework that scores every run. Across flows and app types it answers the
+    only four questions a manager asks: <b>how reliable, what cost, how many tokens, and how long.</b>
+  </p>
+  <div class="actions">
+    <a class="btn btn-primary" href="results.html">See the live results →</a>
+    <a class="btn btn-ghost" href="flows.html">How it's measured</a>
+    <a class="btn btn-ghost" href="brief.html">The agent itself</a>
+  </div>
+</section>
+
+<!-- =================================================================== -->
+<!-- HEADLINE METRICS (incl. TIME)                                        -->
+<!-- =================================================================== -->
+<section id="metrics">
+  <div class="section-head">
+    <div class="section-num">01 / the headline</div>
+    <h2>Every run measured — cost, accuracy, tokens, and time.</h2>
+    <p class="lede">Numbers below are live from <span class="mono">runs.db</span> (11 runs). The full,
+      auto-regenerating dashboard — including per-flow run-to-run variability charts — lives on the
+      <a href="results.html" style="color:var(--accent-warm);text-decoration:none;border-bottom:1px solid var(--border-subtle);">results page</a>.</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="n">100<span class="warm">%</span></div><div class="l">scored pass-rate</div></div>
+    <div class="stat"><div class="n">11</div><div class="l">runs measured</div></div>
+    <div class="stat"><div class="n">2&nbsp;/&nbsp;3</div><div class="l">app types live</div></div>
+    <div class="stat"><div class="n">~285<span class="warm">s</span></div><div class="l">time / run</div></div>
+    <div class="stat"><div class="n">3.5<span class="warm">M</span></div><div class="l">tokens measured</div></div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>App type</th><th class="num">Runs</th><th class="num">Pass % (scored)</th><th class="num">$/run</th><th class="num">Avg tokens</th><th class="num">Avg steps</th><th class="num">Time/run</th></tr></thead>
+      <tbody>
+        <tr><td>browser <span class="muted">(TradingView)</span></td><td class="num">8</td><td class="num">100%</td><td class="num">$1.15</td><td class="num">360,335</td><td class="num">24.0</td><td class="num">285.3s</td></tr>
+        <tr><td>no_api <span class="muted">(Proton Mail)</span></td><td class="num">3</td><td class="num">100%</td><td class="num">$0.65</td><td class="num">212,514</td><td class="num">16.3</td><td class="num">292.2s</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="table-note">Best tuned run to date: TradingView at <b>12 steps · 189s · $0.60</b>. Pass% is over
+    <em>scored</em> runs only — "couldn't-verify" infra errors are tracked separately and never count as
+    accuracy failures. <a href="results.html">See the per-run breakdown →</a></p>
+</section>
+
+<!-- =================================================================== -->
+<!-- REQUIREMENTS                                                         -->
+<!-- =================================================================== -->
+<section id="requirements">
+  <div class="section-head">
+    <div class="section-num">02 / what it takes to run</div>
+    <h2>Three macOS permissions, no sudo.</h2>
+    <p class="lede">The agent needs <em>eyes</em>, <em>hands</em>, and the ability to <em>talk to apps</em> —
+      three TCC grants on the host terminal. Nothing privileged: the demo flows install nothing and
+      <span class="mono">safe_shell()</span> hard-refuses <span class="mono">sudo</span>.</p>
+  </div>
+
+  <div class="reqs">
+    <div class="req"><div class="rt">Screen Recording</div><div class="rd">The agent's <b>eyes</b> — every step shoots the screen via <span class="mono">screencapture&nbsp;-x</span>.</div></div>
+    <div class="req"><div class="rt">Accessibility</div><div class="rd">The agent's <b>hands</b> — <span class="mono">pyautogui</span> synthesizes clicks, keystrokes, scroll, hotkeys.</div></div>
+    <div class="req"><div class="rt">Automation</div><div class="rd"><b>Talk to apps</b> — <span class="mono">osascript</span> activates apps and opens URLs; prompts per app.</div></div>
+    <div class="req warm"><div class="rt">No sudo</div><div class="rd"><span class="mono">safe_shell()</span> refuses <span class="mono">sudo</span>, <span class="mono">rm</span>, disk-erase, and anything outside a read-only allow-list.</div></div>
+  </div>
+  <p class="kvline">
+    <b>Runtime:</b> macOS + display · Python 3 · <span class="mono">pip install -r requirements.txt</span> &nbsp;·&nbsp;
+    <b>Secret:</b> <span class="mono">ANTHROPIC_API_KEY</span> in a gitignored <span class="mono">.env</span> &nbsp;·&nbsp;
+    <b>Preflight:</b> <span class="mono">agent.py --diagnose</span> probes the capture + input paths before spending tokens.
+    <br>Full permission table and failure modes: <a href="flows.html#technical" style="color:var(--accent-warm);text-decoration:none;border-bottom:1px solid var(--border-subtle);">Framework → Architecture</a>.
+  </p>
+</section>
+
+<!-- =================================================================== -->
+<!-- ROUTES                                                               -->
+<!-- =================================================================== -->
+<section id="explore">
+  <div class="section-head">
+    <div class="section-num">03 / explore</div>
+    <h2>Three ways in.</h2>
+  </div>
+  <div class="grid">
+    <a class="route" href="brief.html">
+      <span class="rn">the agent</span>
+      <h3>Agent brief</h3>
+      <p>How the review-gated agent loop works: three checkpoints between the model and your machine, the risk taxonomy enforced in code, and the eight modules behind it.</p>
+      <span class="go">brief.html →</span>
+    </a>
+    <a class="route" href="flows.html">
+      <span class="rn">the framework</span>
+      <h3>Measurement flows</h3>
+      <p>The deterministic layer: fixed playbooks, a per-flow oracle (machine where we can, human where we can't), and the architecture that turns each run into one scored row.</p>
+      <span class="go">flows.html →</span>
+    </a>
+    <a class="route" href="results.html">
+      <span class="rn">the numbers</span>
+      <h3>Live results</h3>
+      <p>The auto-generated dashboard straight from <span class="mono">runs.db</span>: cost, accuracy, tokens, steps, time/run, and run-to-run variability — regenerated on every run.</p>
+      <span class="go">results.html →</span>
+    </a>
+  </div>
+</section>
+
+<footer>
+  <span class="muted">coa-test · review-gated computer-use agent + measurement flows</span><br>
+  <a href="brief.html">Agent</a> &nbsp;·&nbsp;
+  <a href="flows.html">Framework</a> &nbsp;·&nbsp;
+  <a href="results.html">Live results</a> &nbsp;·&nbsp;
+  <a href="ARCHITECTURE.md">Architecture notes</a> &nbsp;·&nbsp;
+  <a href="PLAN.md">Design &amp; decisions</a>
+</footer>
+
+<script>
+  // ---- theme toggle (persisted, shared key with brief.html / flows.html)
+  const root = document.documentElement;
+  const toggle = document.getElementById('themeToggle');
+  const stored = localStorage.getItem('coa-theme');
+  if (stored === 'light' || stored === 'dark') root.setAttribute('data-theme', stored);
+  const syncLabel = () => { toggle.textContent = root.getAttribute('data-theme') === 'dark' ? 'light mode' : 'dark mode'; };
+  syncLabel();
+  toggle.addEventListener('click', () => {
+    const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('coa-theme', next);
+    syncLabel();
+  });
+</script>
+</body></html>
