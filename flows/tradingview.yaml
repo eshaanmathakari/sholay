@@ -1,0 +1,60 @@
+# Flow #1 — TradingView (browser). Deterministic playbook; the agent executes each
+# step live via vision. See docs/PLAN.md §7.
+name: tradingview_spx
+app_type: browser
+model: claude-sonnet-4-6
+mode: measure
+browser: Brave Browser
+steps_expected: 8
+
+oracle: tradingview
+oracle_config:
+  symbol: SPX
+  quote_symbol: "^spx"     # stooq ticker for the S&P 500 index
+  tolerance: 0.005          # ±0.5% close-price match
+pattern_reference: flows/ta_patterns.json
+
+# The final step must emit exactly these fields (checked by the oracle / runner).
+emit_schema: [last_close, tf_daily, tf_4h, patterns, paragraph]
+
+steps:
+  - id: open_browser
+    goal: "Open the Brave browser and bring it to the foreground."
+  - id: goto_tradingview
+    goal: >
+      Open tradingview.com in Brave. Use the macos tool to open the URL directly — e.g.
+      run_applescript: tell application "Brave Browser" to open location "https://www.tradingview.com".
+      Do NOT press Cmd+T and do NOT type the URL into the address bar by hand: when a
+      TradingView chart already has focus it captures Cmd+T as its in-page symbol search, and
+      manual address-bar typing has misfired (e.g. "ltradingview.com"). A new browser tab is
+      not required — opening the location in Brave is enough.
+  - id: open_spx_chart
+    goal: >
+      Open the S&P 500 (SPX) chart. Use the macos tool to open the URL directly in Brave —
+      run_applescript: tell application "Brave Browser" to open location
+      "https://www.tradingview.com/chart/?symbol=SPX". Avoid the in-page symbol search and
+      avoid Cmd+T. Dismiss any login/cookie/popup overlays first.
+  - id: set_daily
+    goal: >
+      Set the chart timeframe to Daily (1D) by opening the interval URL directly via the macos
+      tool — run_applescript: tell application "Brave Browser" to open location
+      "https://www.tradingview.com/chart/?symbol=SPX&interval=1D". This URL-param navigation is
+      far more reliable and deterministic than the timeframe dropdown; do not fight the dropdown.
+  - id: screenshot_daily
+    goal: "Capture the Daily chart clearly in view."
+  - id: set_4h
+    goal: >
+      Set the chart timeframe to 4 hours (4H) by opening the interval URL directly via the macos
+      tool — run_applescript: tell application "Brave Browser" to open location
+      "https://www.tradingview.com/chart/?symbol=SPX&interval=240" (240 minutes = 4H). Prefer
+      this over the dropdown; do not fight the dropdown.
+  - id: screenshot_4h
+    goal: "Capture the 4H chart clearly in view."
+  - id: analyze
+    goal: >
+      Read the last close price shown on the chart. Using the provided technical-analysis
+      pattern catalog, flag any patterns you can see on the Daily and 4H charts. Write a
+      short paragraph of observations. Emit a JSON object with keys:
+      last_close (number), tf_daily (true), tf_4h (true),
+      patterns (list of {name, timeframe, rationale} using names from the catalog),
+      paragraph (string).

@@ -1,0 +1,23 @@
+{
+  "_note": "Standard chart-pattern catalog (common public TA taxonomy, e.g. Bulkowski / Investopedia). Injected into the TradingView flow prompt so the agent names patterns from a fixed vocabulary; the oracle checks emitted pattern names against this catalog for structural validity (not whether the pattern is genuinely present).",
+  "patterns": [
+    {"name": "Double Top", "type": "reversal", "definition": "Two peaks at similar highs separated by a trough; bearish reversal once the trough (neckline) breaks."},
+    {"name": "Double Bottom", "type": "reversal", "definition": "Two troughs at similar lows separated by a peak; bullish reversal once the peak (neckline) breaks."},
+    {"name": "Triple Top", "type": "reversal", "definition": "Three peaks at similar highs; bearish reversal on support break."},
+    {"name": "Triple Bottom", "type": "reversal", "definition": "Three troughs at similar lows; bullish reversal on resistance break."},
+    {"name": "Head and Shoulders", "type": "reversal", "definition": "Three peaks, the middle (head) highest; bearish reversal on neckline break."},
+    {"name": "Inverse Head and Shoulders", "type": "reversal", "definition": "Three troughs, the middle (head) lowest; bullish reversal on neckline break."},
+    {"name": "Ascending Triangle", "type": "continuation", "definition": "Flat resistance with rising lows; typically resolves upward."},
+    {"name": "Descending Triangle", "type": "continuation", "definition": "Flat support with falling highs; typically resolves downward."},
+    {"name": "Symmetrical Triangle", "type": "bilateral", "definition": "Converging trendlines (lower highs, higher lows); breakout in either direction."},
+    {"name": "Bull Flag", "type": "continuation", "definition": "Sharp rise then a small downward-sloping consolidation; bullish continuation."},
+    {"name": "Bear Flag", "type": "continuation", "definition": "Sharp drop then a small upward-sloping consolidation; bearish continuation."},
+    {"name": "Pennant", "type": "continuation", "definition": "Small symmetrical triangle after a strong move; continuation in the prior direction."},
+    {"name": "Rising Wedge", "type": "reversal", "definition": "Converging up-sloping lines; typically bearish resolution."},
+    {"name": "Falling Wedge", "type": "reversal", "definition": "Converging down-sloping lines; typically bullish resolution."},
+    {"name": "Cup and Handle", "type": "continuation", "definition": "Rounded bottom (cup) then a small pullback (handle); bullish continuation."},
+    {"name": "Ascending Channel", "type": "trend", "definition": "Price between two parallel up-sloping trendlines (uptrend)."},
+    {"name": "Descending Channel", "type": "trend", "definition": "Price between two parallel down-sloping trendlines (downtrend)."},
+    {"name": "Rectangle", "type": "bilateral", "definition": "Sideways range between horizontal support and resistance; breakout either direction."}
+  ]
+}

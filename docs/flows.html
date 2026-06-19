@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>coa-test — deterministic measurement flows</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ---- design tokens (shared with docs/brief.html) ------------------ */
+  :root[data-theme="dark"] {
+    --bg-base: #0A0A0A; --bg-surface: #161616; --bg-elevated: #1C1C1C; --bg-substrate: #14110E;
+    --border-subtle: #2A2A2A; --border-strong: #3A3A3A;
+    --text-primary: #EDEDED; --text-muted: #888888;
+    --accent-main: #E0E0E0; --accent-warm: #FFB088;
+    --shadow-tilt: rgba(0, 0, 0, 0.5); --noise-opacity: 0.04;
+  }
+  :root[data-theme="light"] {
+    --bg-base: #FDFBF7; --bg-surface: #F2EBE1; --bg-elevated: #EDE4D6; --bg-substrate: #E8DECB;
+    --border-subtle: #E2D9C8; --border-strong: #C9BEA9;
+    --text-primary: #2B2824; --text-muted: #8C857B;
+    --accent-main: #1A1815; --accent-warm: #8B5A3C;
+    --shadow-tilt: rgba(43, 40, 36, 0.15); --noise-opacity: 0;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-base); color: var(--text-primary); line-height: 1.6; font-weight: 400;
+    transition: background 0.4s cubic-bezier(0.16,1,0.3,1), color 0.4s cubic-bezier(0.16,1,0.3,1);
+    overflow-x: hidden;
+  }
+  code, pre, .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  h1, h2, h3, h4 { letter-spacing: -0.03em; font-weight: 600; line-height: 1.15; }
+  h1 { font-size: clamp(2.5rem, 6vw, 4.5rem); font-weight: 700; }
+  h2 { font-size: clamp(1.75rem, 3.5vw, 2.5rem); }
+  h3 { font-size: 1.25rem; font-weight: 500; }
+  .muted { color: var(--text-muted); }
+
+  .noise {
+    position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: var(--noise-opacity);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    animation: noise-shift 8s steps(8) infinite; transition: opacity 0.4s cubic-bezier(0.16,1,0.3,1);
+  }
+  @keyframes noise-shift {
+    0% { transform: translate(0,0); } 25% { transform: translate(-3%,2%); }
+    50% { transform: translate(2%,-3%); } 75% { transform: translate(-2%,-2%); } 100% { transform: translate(0,0); }
+  }
+
+  nav.top {
+    position: sticky; top: 0; z-index: 50; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    background: color-mix(in srgb, var(--bg-base) 75%, transparent); border-bottom: 1px solid var(--border-subtle);
+  }
+  .nav-inner { max-width: 1100px; margin: 0 auto; padding: 14px 32px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .brand { font-weight: 600; letter-spacing: -0.02em; font-size: 0.95rem; }
+  .brand .dot { color: var(--text-muted); margin: 0 8px; } .brand .tag { color: var(--text-muted); font-weight: 400; }
+  .tabs { display: flex; gap: 4px; padding: 4px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 8px; }
+  .tab { background: transparent; color: var(--text-muted); border: none; border-radius: 6px; padding: 6px 16px; font-family: inherit; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: background .25s cubic-bezier(0.16,1,0.3,1), color .25s cubic-bezier(0.16,1,0.3,1); }
+  .tab:hover { color: var(--text-primary); }
+  .tab.active { background: var(--bg-elevated); color: var(--text-primary); border: 1px solid var(--border-subtle); padding: 5px 15px; }
+  .theme-toggle { background: transparent; color: var(--text-primary); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 6px 14px; font-family: inherit; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: background .3s, border-color .3s; }
+  .theme-toggle:hover { background: var(--bg-surface); border-color: var(--border-strong); }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; animation: panel-in 0.5s cubic-bezier(0.16,1,0.3,1); }
+  @keyframes panel-in { from { opacity: 0; transform: translateY(6px) scale(0.995); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+  section { position: relative; z-index: 2; max-width: 1100px; margin: 0 auto; padding: 96px 32px; }
+  section + section { border-top: 1px solid var(--border-subtle); }
+  .lede { color: var(--text-muted); max-width: 720px; margin-top: 16px; font-size: 1.05rem; }
+
+  .hero { padding-top: 120px; padding-bottom: 120px; }
+  .hero .eyebrow { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--text-muted); letter-spacing: 0.05em; padding: 6px 12px; border: 1px solid var(--border-subtle); border-radius: 6px; margin-bottom: 28px; }
+  .hero h1 { max-width: 960px; } .hero .lede { font-size: 1.2rem; max-width: 760px; margin-top: 28px; }
+  .hero .actions { margin-top: 40px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn { display: inline-block; padding: 10px 20px; border-radius: 6px; font-family: inherit; font-size: 0.9rem; font-weight: 500; text-decoration: none; cursor: pointer; transition: background .3s, color .3s, border-color .3s; border: 1px solid transparent; }
+  .btn-primary { background: var(--accent-main); color: var(--bg-base); border-color: var(--accent-main); }
+  .btn-primary:hover { background: var(--text-primary); }
+  .btn-ghost { background: transparent; color: var(--text-primary); border-color: var(--border-subtle); }
+  .btn-ghost:hover { background: var(--bg-surface); border-color: var(--border-strong); }
+
+  .section-head { margin-bottom: 56px; max-width: 800px; }
+  .section-num { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--text-muted); letter-spacing: 0.1em; margin-bottom: 16px; text-transform: uppercase; }
+
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 28px; transform-style: preserve-3d; transition: transform .2s cubic-bezier(0.16,1,0.3,1), background .4s, border-color .4s, box-shadow .2s; will-change: transform; }
+  .card .head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; gap: 12px; }
+  .card h3 { font-family: 'JetBrains Mono', monospace; font-size: 1rem; font-weight: 500; }
+  .card .meta { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-muted); }
+  .card p { font-size: 0.95rem; color: var(--text-muted); line-height: 1.55; }
+  .card .role { color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; font-weight: 500; }
+  .card.cross { border-color: var(--accent-warm); }
+  .card.cross .role { color: var(--accent-warm); }
+
+  /* ---- stat strip --------------------------------------------------- */
+  .stats { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; }
+  .stat { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 18px 22px; min-width: 150px; }
+  .stat .n { font-size: 1.9rem; font-weight: 700; letter-spacing: -0.03em; }
+  .stat .n .warm { color: var(--accent-warm); }
+  .stat .l { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text-muted); letter-spacing: 0.05em; text-transform: uppercase; margin-top: 4px; }
+
+  /* ---- layered architecture diagram (shared look with brief.html) --- */
+  .arch { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 32px 28px; }
+  .arch-layer { display: grid; grid-template-columns: 120px 1fr; gap: 20px; align-items: stretch; margin-bottom: 8px; }
+  .arch-layer .layer-label { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; padding-top: 16px; }
+  .arch-layer .layer-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+  .arch-box { background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; transition: background .3s, border-color .3s; }
+  .arch-box .ab-title { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--text-primary); font-weight: 500; }
+  .arch-box .ab-sub { font-size: 0.78rem; color: var(--text-muted); line-height: 1.4; }
+  .arch-box.cross { border-color: var(--accent-warm); } .arch-box.cross .ab-title { color: var(--accent-warm); }
+  .arch-box.host { background: transparent; border-style: dashed; }
+  .arch-arrow { grid-column: 2; text-align: center; padding: 6px 0; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text-muted); letter-spacing: 0.05em; }
+  .arch-arrow::before { content: "↓ "; color: var(--accent-warm); }
+  .arch-substrate { margin-top: 18px; background: var(--bg-substrate); border: 1px solid var(--accent-warm); border-radius: 12px; padding: 22px 24px; position: relative; }
+  .arch-substrate::before { content: ""; position: absolute; left: 50%; top: -22px; width: 1px; height: 22px; background: var(--accent-warm); opacity: 0.5; }
+  .arch-substrate .sub-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .arch-substrate .sub-name { font-family: 'JetBrains Mono', monospace; font-size: 0.95rem; color: var(--accent-warm); font-weight: 500; }
+  .arch-substrate .sub-label { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; }
+  .arch-substrate p { color: var(--text-muted); font-size: 0.88rem; line-height: 1.55; }
+  .arch-substrate .outputs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .arch-substrate .outputs span { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-primary); padding: 4px 10px; background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: 4px; }
+
+  /* ---- mermaid ------------------------------------------------------ */
+  .mmd-wrap { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 28px 24px; margin-bottom: 20px; overflow-x: auto; }
+  .mmd-cap { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  .mmd-cap .label { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; }
+  .mmd-cap .hint { font-size: 0.82rem; color: var(--text-muted); } .mmd-cap .hint b { color: var(--accent-warm); font-weight: 500; }
+  .mmd { min-height: 60px; text-align: center; } .mmd svg { max-width: 100%; height: auto; }
+  .mmd .node a, .mmd a { cursor: pointer; } .mmd .node a:hover .label, .mmd .node a:hover tspan { text-decoration: underline; }
+  .mmd-fallback { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--text-muted); padding: 8px 0; }
+
+  /* ---- table -------------------------------------------------------- */
+  .table-wrap { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 12px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 14px 20px; border-bottom: 1px solid var(--border-subtle); }
+  tbody tr:last-child td { border-bottom: none; }
+  th { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 500; color: var(--text-muted); letter-spacing: 0.05em; text-transform: uppercase; background: var(--bg-elevated); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td .mono { font-size: 0.85rem; color: var(--text-primary); }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; font-weight: 500; border: 1px solid var(--border-subtle); }
+  .badge.machine { color: var(--text-primary); }
+  .badge.human { color: var(--accent-warm); border-color: color-mix(in srgb, var(--accent-warm) 35%, transparent); background: color-mix(in srgb, var(--accent-warm) 8%, transparent); }
+  .badge.pending { color: var(--text-muted); }
+
+  /* ---- callout ------------------------------------------------------ */
+  .callout { margin-top: 24px; display: flex; gap: 16px; align-items: flex-start; padding: 18px 22px; background: var(--bg-substrate); border: 1px solid var(--accent-warm); border-radius: 12px; }
+  .callout .pin { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--bg-base); background: var(--accent-warm); padding: 3px 9px; border-radius: 4px; white-space: nowrap; margin-top: 2px; }
+  .callout .body { font-size: 0.9rem; color: var(--text-muted); line-height: 1.6; }
+  .callout .body b { color: var(--text-primary); font-weight: 600; }
+
+  footer { border-top: 1px solid var(--border-subtle); padding: 40px 32px; text-align: center; color: var(--text-muted); font-size: 0.85rem; line-height: 1.7; position: relative; z-index: 2; }
+  footer a { color: var(--text-primary); text-decoration: none; border-bottom: 1px solid var(--border-subtle); }
+  footer a:hover { border-color: var(--accent-warm); }
+
+  .mount { opacity: 0; transform: scale(0.98) translateY(8px); }
+  .mount.visible { opacity: 1; transform: scale(1) translateY(0); transition: opacity .7s cubic-bezier(0.16,1,0.3,1), transform .7s cubic-bezier(0.16,1,0.3,1); }
+  .two-col { display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: start; }
+  .kv { display: flex; flex-direction: column; gap: 4px; padding: 16px 0; border-bottom: 1px solid var(--border-subtle); }
+  .kv:last-child { border-bottom: none; }
+  .kv .k { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--text-muted); letter-spacing: 0.05em; }
+  .kv .v { color: var(--text-primary); font-size: 0.95rem; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+    .noise { animation: none; }
+  }
+  @media (max-width: 720px) {
+    section { padding: 64px 20px; } .nav-inner { padding: 12px 20px; flex-wrap: wrap; }
+    .hero { padding-top: 90px; padding-bottom: 80px; }
+    .arch-layer { grid-template-columns: 1fr; gap: 8px; } .arch-layer .layer-label { padding-top: 0; } .arch-arrow { grid-column: 1; }
+  }
+</style>
+</head>
+<body>
+
+<div class="noise" aria-hidden="true"></div>
+
+<nav class="top">
+  <div class="nav-inner">
+    <span class="brand">coa-test <span class="dot">·</span> <span class="tag">measurement flows</span></span>
+    <div class="tabs" role="tablist">
+      <button class="tab active" role="tab" data-target="overview">Overview</button>
+      <button class="tab"        role="tab" data-target="technical">Architecture</button>
+    </div>
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">light mode</button>
+  </div>
+</nav>
+
+<!-- =================================================================== -->
+<!-- OVERVIEW TAB                                                         -->
+<!-- =================================================================== -->
+<div class="tab-panel active" id="panel-overview" role="tabpanel">
+
+<section class="hero mount">
+  <span class="eyebrow">measured · cost · accuracy · tokens</span>
+  <h1>Three deterministic flows, every run measured for cost, accuracy, and tokens.</h1>
+  <p class="lede">
+    The predecessor agent "navigated however it wanted." This layer inverts that: fixed,
+    written-down playbooks across three application <em>types</em> — browser, no-API, legacy —
+    each run scored by a per-flow <strong>oracle</strong> and recorded one row per run. It answers,
+    per flow and per app-type: how reliable is it, what does a run cost, and how many tokens does it burn?
+  </p>
+  <div class="actions">
+    <button class="btn btn-primary" data-jump="technical">See the architecture →</button>
+    <a class="btn btn-ghost" href="results.html">Live metrics dashboard</a>
+  </div>
+</section>
+
+<section id="concept" class="mount">
+  <div class="section-head">
+    <div class="section-num">01 / what it is</div>
+    <h2>A fixed playbook, executed by vision, measured at every step.</h2>
+    <p class="lede">
+      Each flow is a YAML playbook the agent executes one sub-goal at a time by looking at the
+      screen — no scripted clicks. The runner reuses the agent's perception/action primitives so
+      behaviour is identical, then records cost, tokens, accuracy, and timing for the run.
+    </p>
+  </div>
+  <div class="two-col">
+    <div class="card tilt"><div class="role">Fixed playbook</div><p>An ordered list of sub-goals in <span class="mono">flows/*.yaml</span> — same plan every run, live pixels. The LLM still executes by vision.</p></div>
+    <div class="card tilt"><div class="role">Measured every step</div><p>Per-step tokens, time, actions, and retries are captured as the run unfolds; cost is computed at verified <span class="mono">$/MTok</span> rates.</p></div>
+    <div class="card tilt"><div class="role">Scored by an oracle</div><p>A per-flow verifier turns the run into <span class="mono">pass</span> / <span class="mono">fail</span> / <span class="mono">error</span> — the independent answer key.</p></div>
+    <div class="card tilt"><div class="role">One row per run</div><p>No best-of-N. Every invocation appends one SQLite row; pass-rate and averages are queries over accumulated history.</p></div>
+  </div>
+</section>
+
+<section id="oracle" class="mount">
+  <div class="section-head">
+    <div class="section-num">02 / the key idea</div>
+    <h2>The oracle is the answer key — machine where we can, human where we can't.</h2>
+    <p class="lede">
+      The oracle is independent of what the agent perceived, and its verification method is chosen
+      to fit the app type. That single choice is what makes "no-API" a first-class app type rather
+      than a gap.
+    </p>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Flow</th><th>App type</th><th>Oracle</th><th>Objective fact</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">tradingview_spx</td><td>browser</td><td><span class="badge machine">machine-verified</span></td><td>fetch an independent S&amp;P 500 quote, check the agent's read close within ±0.5%</td></tr>
+        <tr><td class="mono">proton_mark_read</td><td>no_api</td><td><span class="badge human">human-verified</span></td><td>no API to check against → an approval dialog pops; the reviewer's click is the verdict</td></tr>
+        <tr><td class="mono">(legacy app)</td><td>legacy</td><td><span class="badge pending">pending</span></td><td>drop-in once the app is chosen — a YAML + an oracle</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout">
+    <span class="pin">why it matters</span>
+    <span class="body">Machine-verify where a source of truth exists; human-gate where none does. The browser flow runs fully autonomously with a machine answer key — the no-API flow keeps a human approval gate, which <b>revives the in-the-loop safety story the autonomous flow turns off</b>, while still recording the same cost/token metrics.</span>
+  </div>
+</section>
+
+<section id="flows" class="mount">
+  <div class="section-head">
+    <div class="section-num">03 / the flows</div>
+    <h2>Two built, one drop-in away.</h2>
+  </div>
+  <div class="grid">
+    <div class="card tilt cross">
+      <div class="head"><h3>Flow #1 — TradingView</h3><span class="meta">browser · measure</span></div>
+      <div class="role">Machine-verified</div>
+      <p>Open Brave → SPX chart → set Daily, then 4H → read the last close → flag TA patterns from a fixed catalog. The oracle checks the emitted close against an independent quote (±0.5%), both timeframes covered, patterns named from the catalog.</p>
+    </div>
+    <div class="card tilt cross">
+      <div class="head"><h3>Flow #3 — Proton Mail</h3><span class="meta">no_api · demo</span></div>
+      <div class="role">Human-verified</div>
+      <p>Activate the <em>native</em> Proton Mail app → select the top 5 inbox emails → "Mark as read." With no API to verify a mailbox, the human approval gate is the oracle. Ran green live: top-5 marked read, unread count dropped exactly as expected.</p>
+    </div>
+    <div class="card tilt">
+      <div class="head"><h3>Flow #2 — legacy app</h3><span class="meta">legacy · pending</span></div>
+      <div class="role">To be chosen</div>
+      <p>The third app type. Adding it is the same drop-in as the others: a <span class="mono">flows/&lt;name&gt;.yaml</span> playbook + an <span class="mono">oracles/&lt;name&gt;.py</span> verifier — no framework changes. It fills the third column of the comparison.</p>
+    </div>
+  </div>
+</section>
+
+<section id="results" class="mount">
+  <div class="section-head">
+    <div class="section-num">04 / results</div>
+    <h2>Verified, from <span class="mono">runs.db</span>.</h2>
+    <p class="lede">The manager-facing headline: cost, accuracy, and tokens compared across app types. Live numbers regenerate into <a href="results.html" style="color:var(--accent-warm);text-decoration:none;border-bottom:1px solid var(--border-subtle);">results.html</a> on every run.</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="n">100<span class="warm">%</span></div><div class="l">scored pass-rate</div></div>
+    <div class="stat"><div class="n">0.0001<span class="warm">%</span></div><div class="l">close-price error</div></div>
+    <div class="stat"><div class="n">64</div><div class="l">offline tests</div></div>
+    <div class="stat"><div class="n">2&nbsp;/&nbsp;3</div><div class="l">app types live</div></div>
+  </div>
+
+  <div class="table-wrap" style="margin-top:28px;">
+    <table>
+      <thead><tr><th>App type</th><th class="num">Runs</th><th class="num">Err</th><th class="num">Pass % (scored)</th><th class="num">$/run</th><th class="num">Avg tokens</th><th class="num">Avg steps</th><th class="num">Time/run</th></tr></thead>
+      <tbody>
+        <tr><td>browser <span class="muted">(TradingView)</span></td><td class="num">8</td><td class="num">1</td><td class="num">100%</td><td class="num">$1.15</td><td class="num">360,335</td><td class="num">24.0</td><td class="num">285.3s</td></tr>
+        <tr><td>no_api <span class="muted">(Proton)</span></td><td class="num">3</td><td class="num">1</td><td class="num">100%</td><td class="num">$0.65</td><td class="num">212,514</td><td class="num">16.3</td><td class="num">292.2s</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <span class="pin">cost is tunable</span>
+    <span class="body">Flow #1's first run thrashed the timeframe dropdown: <b>52 actions / 502s / $2.73</b>. We measured the waste and switched the playbook to URL-parameter navigation — the same run now costs <b>16 actions / 224s / $0.73</b>, ~73% cheaper. Measure → spot the waste → edit the playbook → re-measure. <span class="muted">($/run above is averaged over all runs incl. the one pre-fix outlier; "couldn't-verify" errors are shown separately and never count as accuracy failures.)</span></span>
+  </div>
+
+  <h3 style="margin-top:48px; font-family:'JetBrains Mono',monospace; font-size:1rem; font-weight:500;">Run-to-run variability — same playbook, different paths</h3>
+  <p class="lede" style="margin-top:12px;">The playbook is fixed, but the agent never walks the exact same path twice: step count and wall-clock time <em>drift</em> run to run. TradingView's steps span <b>12–52</b> — <b>right-skewed (+0.99)</b>: the mean (24.0) sits right of the median (20.0) because the one pre-fix thrash run drags it up, while the tuned runs cluster at 12–24 (the latest is the new low, 12 steps / $0.60).</p>
+  <div class="card" style="margin-top:20px; padding:24px 28px;">
+    <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:6px;"><span class="mono" style="font-size:0.9rem;">tradingview_spx</span><span class="muted" style="font-size:0.8rem;">steps / run · 8 runs</span></div>
+    <svg viewBox="0 0 460 80" preserveAspectRatio="xMidYMid meet" role="img" style="width:100%; max-width:520px; height:auto; overflow:visible; font-family:'JetBrains Mono',monospace; font-size:11px;">
+      <line x1="18" y1="58" x2="442" y2="58" stroke="var(--border-strong)" stroke-width="1.5"/>
+      <circle cx="53.3" cy="52" r="3.6" fill="var(--accent-warm)"/>
+      <circle cx="88.7" cy="52" r="3.6" fill="var(--accent-warm)"/>
+      <circle cx="88.7" cy="43" r="3.6" fill="var(--accent-warm)"/>
+      <circle cx="97.5" cy="52" r="3.6" fill="var(--accent-warm)"/>
+      <circle cx="150.5" cy="52" r="3.6" fill="var(--accent-warm)"/>
+      <circle cx="159.3" cy="52" r="3.6" fill="var(--accent-warm)"/>
+      <circle cx="230.0" cy="52" r="3.6" fill="var(--accent-warm)"/>
+      <circle cx="406.7" cy="52" r="3.6" fill="var(--accent-warm)"/>
+      <line x1="124.0" y1="14" x2="124.0" y2="64" stroke="var(--text-primary)" stroke-width="2"/>
+      <text x="124.0" y="10" text-anchor="middle" fill="var(--text-primary)">med 20</text>
+      <line x1="159.3" y1="28" x2="159.3" y2="64" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="3 2"/>
+      <text x="163.3" y="26" text-anchor="start" fill="var(--text-muted)">mean 24</text>
+      <text x="18" y="74" text-anchor="start" fill="var(--text-muted)">12</text>
+      <text x="442" y="74" text-anchor="end" fill="var(--text-muted)">52</text>
+    </svg>
+    <p class="muted" style="font-size:0.8rem; margin-top:10px;">Each dot is one run; solid tick = median, dashed tick = mean — the gap is the skew. Live per-flow charts (steps <em>and</em> time/run) regenerate into <a href="results.html" style="color:var(--accent-warm); text-decoration:none; border-bottom:1px solid var(--border-subtle);">results.html</a>.</p>
+  </div>
+</section>
+
+</div><!-- /panel-overview -->
+
+<!-- =================================================================== -->
+<!-- ARCHITECTURE TAB                                                     -->
+<!-- =================================================================== -->
+<div class="tab-panel" id="panel-technical" role="tabpanel" hidden>
+
+<section class="mount">
+  <div class="section-head">
+    <div class="section-num">01 / architecture</div>
+    <h2>Playbook → measured vision loop → oracle → metrics.</h2>
+    <p class="lede">
+      The runner loads a validated spec, drives the agent through it one sub-goal at a time, parses
+      the final emitted JSON, and hands it to the flow's oracle. Cost, tokens, and status land in
+      <span class="mono">runs.db</span>; <span class="mono">report.py</span> rolls it up into the dashboard.
+    </p>
+  </div>
+
+  <div class="mmd-wrap">
+    <div class="mmd-cap">
+      <span class="label">interactive map · modules &amp; data flow</span>
+      <span class="hint"><b>Click any box to open its source file.</b> Solid arrows = the live loop · dotted = side paths.</span>
+    </div>
+    <div class="mmd" id="mmArch"><div class="mmd-fallback">Loading interactive diagram… (needs a network connection for mermaid.js — the annotated diagram below works fully offline.)</div></div>
+  </div>
+
+  <div class="mmd-wrap">
+    <div class="mmd-cap">
+      <span class="label">interactive map · one measured run</span>
+      <span class="hint"><b>Step by step, then scored.</b> Click a node to jump to the function that handles it.</span>
+    </div>
+    <div class="mmd" id="mmLoop"><div class="mmd-fallback">Loading interactive diagram…</div></div>
+  </div>
+
+  <div class="arch">
+    <div class="arch-layer">
+      <div class="layer-label">spec</div>
+      <div class="layer-body">
+        <div class="arch-box"><span class="ab-title">flows/*.yaml</span><span class="ab-sub">ordered steps · oracle · app_type · mode · emit_schema</span></div>
+        <div class="arch-box"><span class="ab-title">flows/loader.py</span><span class="ab-sub">validate() pure · load() adds YAML — fail fast on a bad playbook</span></div>
+      </div>
+    </div>
+    <div class="arch-layer"><div class="layer-label"></div><div class="arch-arrow">drives</div></div>
+
+    <div class="arch-layer">
+      <div class="layer-label">runner</div>
+      <div class="layer-body">
+        <div class="arch-box"><span class="ab-title">runner.py · run_flow()</span><span class="ab-sub">one sub-goal at a time · per-step tokens/time/actions · reuses agent.py primitives</span></div>
+      </div>
+    </div>
+    <div class="arch-layer"><div class="layer-label"></div><div class="arch-arrow">screenshot → action → screenshot</div></div>
+
+    <div class="arch-layer">
+      <div class="layer-label">perception</div>
+      <div class="layer-body">
+        <div class="arch-box"><span class="ab-title">Claude computer-use</span><span class="ab-sub">claude-sonnet-4-6 · one action per turn</span></div>
+        <div class="arch-box host"><span class="ab-title">computer.* / macos.*</span><span class="ab-sub">click · type · activate app · run_applescript — shared with the agent</span></div>
+      </div>
+    </div>
+    <div class="arch-layer"><div class="layer-label"></div><div class="arch-arrow">final step emits JSON</div></div>
+
+    <div class="arch-layer">
+      <div class="layer-label">oracle</div>
+      <div class="layer-body">
+        <div class="arch-box cross"><span class="ab-title">oracles/tradingview.py</span><span class="ab-sub">machine: multi-source quote (Yahoo → CNBC → stooq) within ±0.5%</span></div>
+        <div class="arch-box cross"><span class="ab-title">oracles/proton.py</span><span class="ab-sub">human: review.request_final_review() approval dialog</span></div>
+      </div>
+    </div>
+
+    <div class="arch-substrate">
+      <div class="sub-head"><span class="sub-label">substrate</span><span class="sub-name">metrics_db.py + pricing.py</span></div>
+      <p>The oracle's verdict, the measured tokens (priced at verified <span class="mono">$/MTok</span>), and the per-step metrics all land here — one row per run. <span class="mono">report.py</span> queries it; <span class="mono">feedback.py</span> appends a human verdict without mutating the row.</p>
+      <div class="outputs">
+        <span>runs.db · runs</span><span>runs.db · step_metrics</span><span>runs.db · feedback</span>
+        <span>runs/&lt;ts&gt;/final_report.json</span><span>docs/results.html</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="mount">
+  <div class="section-head">
+    <div class="section-num">02 / module reference</div>
+    <h2>Drop a YAML + an oracle — no framework changes.</h2>
+    <p class="lede">The runner, metrics store, pricing, and report are generic over flows. Flow #3 landed with zero edits to any of them.</p>
+  </div>
+  <div class="grid">
+    <div class="card tilt"><div class="head"><h3>runner.py</h3><span class="meta">runner</span></div><div class="role">Drives + measures</div><p>Step-by-step playbook execution, per-step token/time/action capture, emit parsing, oracle call, then the <span class="mono">runs.db</span> row + <span class="mono">final_report.json</span>.</p></div>
+    <div class="card tilt"><div class="head"><h3>flows/loader.py</h3><span class="meta">spec</span></div><div class="role">Validate / load</div><p><span class="mono">validate(dict)</span> is pure (unit-testable without PyYAML); <span class="mono">load(path)</span> adds the file read. A malformed playbook fails loudly, never silently runs.</p></div>
+    <div class="card tilt cross"><div class="head"><h3>oracles/tradingview.py</h3><span class="meta">oracle · machine</span></div><div class="role">Independent quote</div><p><span class="mono">evaluate()</span> pure; <span class="mono">fetch_spx_quote()</span> tries Yahoo → CNBC → stooq with retry. Quote-fetch failure → <span class="mono">error</span>, not a false fail.</p></div>
+    <div class="card tilt cross"><div class="head"><h3>oracles/proton.py</h3><span class="meta">oracle · human</span></div><div class="role">Approval gate</div><p>Reuses <span class="mono">review.request_final_review()</span>; the human's Approve / No / Feedback click becomes the status. <span class="mono">fact_match</span> is always None — no machine fact without an API.</p></div>
+    <div class="card tilt"><div class="head"><h3>metrics_db.py</h3><span class="meta">store</span></div><div class="role">SQLite, stdlib only</div><p><span class="mono">runs</span> / <span class="mono">step_metrics</span> / <span class="mono">feedback</span> tables + <span class="mono">aggregate()</span>. Pass-rate is over scored runs; errors excluded from the denominator.</p></div>
+    <div class="card tilt"><div class="head"><h3>pricing.py</h3><span class="meta">cost</span></div><div class="role">Verified $/MTok</div><p><span class="mono">cost_usd(usage, model)</span> on the verified <span class="mono">claude-sonnet-4-6</span> rate table. Image/screenshot tokens are already inside the API counts.</p></div>
+    <div class="card tilt"><div class="head"><h3>report.py</h3><span class="meta">report</span></div><div class="role">CLI + dashboard</div><p>One query pass feeds a CLI table and <span class="mono">docs/results.html</span> — identical numbers, plus the architecture &amp; cost narrative baked in.</p></div>
+    <div class="card tilt"><div class="head"><h3>feedback.py</h3><span class="meta">capture-only</span></div><div class="role">Human verdict</div><p><span class="mono">feedback.py &lt;run_id&gt; --pass/--fail --notes</span> appends a verdict that may override the oracle, recorded alongside it — never mutating the run's status.</p></div>
+  </div>
+</section>
+
+<section class="mount">
+  <div class="section-head">
+    <div class="section-num">03 / data &amp; cost model</div>
+    <h2>One row per run; cost from verified rates.</h2>
+  </div>
+  <div class="two-col">
+    <div>
+      <div class="kv"><span class="k">runs.db · runs</span><span class="v">status · steps · retries · token counts · cost_usd · latency_s · fact_match · run_dir</span></div>
+      <div class="kv"><span class="k">runs.db · step_metrics</span><span class="v">per-step tokens / time / retries</span></div>
+      <div class="kv"><span class="k">runs.db · feedback</span><span class="v">human verdict + notes, linked to a run (never overwrites status)</span></div>
+      <div class="kv"><span class="k">headline metric</span><span class="v">$ / successful run = avg cost ÷ pass-rate</span></div>
+    </div>
+    <div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Token class</th><th class="num">$ / MTok</th></tr></thead>
+          <tbody>
+            <tr><td>input (uncached)</td><td class="num">3.00</td></tr>
+            <tr><td>output</td><td class="num">15.00</td></tr>
+            <tr><td>cache write (5-min)</td><td class="num">3.75</td></tr>
+            <tr><td>cache read</td><td class="num">0.30</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted" style="font-size:0.82rem; margin-top:14px; line-height:1.6;">
+        <strong>pass%</strong> is over scored runs only (pass ÷ (pass + fail)); an <span class="mono">error</span> means the oracle couldn't verify and is shown separately, never as an accuracy failure.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section class="mount">
+  <div class="section-head">
+    <div class="section-num">04 / permissions</div>
+    <h2>What it takes to replicate — three TCC grants, no sudo.</h2>
+    <p class="lede">
+      The agent needs <em>eyes</em>, <em>hands</em>, and the ability to <em>talk to apps</em> — three macOS
+      privacy permissions granted to the host terminal. Nothing privileged: the demo flows install nothing and
+      <span class="mono">safe_shell()</span> hard-refuses <span class="mono">sudo</span>.
+    </p>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Permission</th><th>Role</th><th>Why it's needed</th><th>Without it</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge machine">Screen Recording</span></td><td>the agent's eyes</td><td>every step shoots the screen via <span class="mono">screencapture -x</span> (<span class="mono">screen.py</span>)</td><td>screenshots are black → run fails at once</td></tr>
+        <tr><td><span class="badge machine">Accessibility</span></td><td>the agent's hands</td><td><span class="mono">pyautogui</span> synthesizes clicks, keystrokes, scroll, hotkeys (<span class="mono">agent.py</span>)</td><td>clicks/typing silently dropped</td></tr>
+        <tr><td><span class="badge human">Automation</span></td><td>talk to apps</td><td><span class="mono">osascript</span> activates apps, hides windows, <span class="mono">open location</span> (<span class="mono">native_actions.py</span>) — prompts <em>per app</em></td><td>each app's first Apple Event prompts; deny → that primitive errors</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="two-col" style="margin-top:24px;">
+    <div>
+      <div class="kv"><span class="k">runtime</span><span class="v">macOS + display · Python 3 · <span class="mono">pip install -r requirements.txt</span></span></div>
+      <div class="kv"><span class="k">secret</span><span class="v"><span class="mono">ANTHROPIC_API_KEY</span> in <span class="mono">.env</span> (gitignored, never committed)</span></div>
+      <div class="kv"><span class="k">apps</span><span class="v">Brave installed (Flow #1) · native Proton Mail installed + logged in (Flow #3)</span></div>
+      <div class="kv"><span class="k">terminal</span><span class="v">run from Terminal.app / iTerm (the TCC grants attach to the host terminal), not the VSCode terminal</span></div>
+      <div class="kv"><span class="k">preflight</span><span class="v"><span class="mono">python -u agent.py --diagnose</span> probes the screencapture + pyautogui paths before spending tokens</span></div>
+    </div>
+    <div>
+      <div class="callout" style="margin-top:0;">
+        <span class="pin">no sudo</span>
+        <span class="body"><span class="mono">native_actions.safe_shell()</span> refuses <span class="mono">sudo</span>, <span class="mono">rm</span>, <span class="mono">mv /</span>, <span class="mono">chmod/chown -R</span>, <span class="mono">diskutil erase</span>, and anything outside a read-only allow-list. The <b>only</b> step that can ever ask for an admin password is the optional DMG-install helper for the not-yet-built <b>legacy app #2</b> — never the browser or Proton flows.</span>
+      </div>
+      <p class="muted" style="font-size:0.82rem; margin-top:16px; line-height:1.6;">
+        <strong>First-run gotcha:</strong> macOS only prompts when a capability is first used, and a freshly
+        granted Screen-Recording / Accessibility permission usually needs the terminal <em>quit and reopened</em>
+        to take effect. Abort any live run by slamming the cursor into a screen corner (<span class="mono">FAILSAFE</span>).
+      </p>
+    </div>
+  </div>
+</section>
+
+</div><!-- /panel-technical -->
+
+<footer>
+  <span class="muted">coa-test · measurement flows</span><br>
+  <a href="results.html">Live metrics</a> &nbsp;·&nbsp;
+  <a href="ARCHITECTURE.md">Architecture notes</a> &nbsp;·&nbsp;
+  <a href="PLAN.md">Design &amp; decisions</a> &nbsp;·&nbsp;
+  <a href="brief.html">The agent brief</a>
+</footer>
+
+<script>
+  // ---- theme toggle (persisted; shared key with brief.html) -----------
+  const root = document.documentElement;
+  const toggle = document.getElementById('themeToggle');
+  const stored = localStorage.getItem('coa-theme');
+  if (stored === 'light' || stored === 'dark') root.setAttribute('data-theme', stored);
+  const syncLabel = () => { toggle.textContent = root.getAttribute('data-theme') === 'dark' ? 'light mode' : 'dark mode'; };
+  syncLabel();
+  toggle.addEventListener('click', () => {
+    const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('coa-theme', next);
+    syncLabel();
+    if (window.renderMermaid) window.renderMermaid();
+  });
+
+  // ---- tab routing (URL hash) -----------------------------------------
+  const tabs = document.querySelectorAll('.tab');
+  const panels = document.querySelectorAll('.tab-panel');
+  function activate(target) {
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.target === target));
+    panels.forEach(p => { const on = p.id === 'panel-' + target; p.classList.toggle('active', on); p.hidden = !on; });
+    if (location.hash.replace('#', '') !== target) {
+      history.replaceState(null, '', target === 'overview' ? location.pathname : '#' + target);
+    }
+    document.querySelectorAll('.tab-panel.active .mount:not(.visible)').forEach(el => io.observe(el));
+    if (target === 'technical' && window.renderMermaid) window.renderMermaid();
+  }
+  tabs.forEach(t => t.addEventListener('click', () => activate(t.dataset.target)));
+  document.querySelectorAll('[data-jump]').forEach(el => el.addEventListener('click', () => activate(el.dataset.jump)));
+  const initial = location.hash.replace('#', '');
+  if (initial === 'technical') activate('technical');
+
+  // ---- mount-in observer ----------------------------------------------
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } });
+  }, { threshold: 0.05 });
+  document.querySelectorAll('.tab-panel.active .mount').forEach(el => io.observe(el));
+
+  // ---- 3D tilt on .tilt cards -----------------------------------------
+  const MAX_TILT = 6;
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduceMotion) document.querySelectorAll('.card.tilt').forEach(card => {
+    let frame = null, last = null;
+    card.addEventListener('mousemove', (ev) => {
+      const r = card.getBoundingClientRect();
+      last = { x: (ev.clientX - r.left) / r.width - 0.5, y: (ev.clientY - r.top) / r.height - 0.5 };
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        const rotY = (last.x * MAX_TILT * 2).toFixed(2), rotX = (-last.y * MAX_TILT * 2).toFixed(2);
+        card.style.transform = `perspective(900px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateZ(2px)`;
+        card.style.boxShadow = `${(-last.x * 18).toFixed(1)}px ${(-last.y * 18).toFixed(1)}px 32px var(--shadow-tilt)`;
+      });
+    });
+    card.addEventListener('mouseleave', () => { if (frame) { cancelAnimationFrame(frame); frame = null; } card.style.transform = ''; card.style.boxShadow = ''; });
+  });
+</script>
+
+<!-- ---- architecture flowcharts (mermaid.js, themed + clickable) ------- -->
+<script type="module">
+(async () => {
+  let mermaid;
+  try {
+    ({ default: mermaid } = await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'));
+  } catch (e) {
+    console.warn('mermaid failed to load (offline?); the annotated diagram still applies.', e);
+    return;
+  }
+  const readVars = () => {
+    const cs = getComputedStyle(document.documentElement);
+    const g = n => cs.getPropertyValue(n).trim();
+    return { bgBase: g('--bg-base'), bgSurface: g('--bg-surface'), bgElevated: g('--bg-elevated'),
+      borderSubtle: g('--border-subtle'), borderStrong: g('--border-strong'),
+      textPrimary: g('--text-primary'), textMuted: g('--text-muted'), accent: g('--accent-warm') };
+  };
+  const themeVars = (v) => ({
+    background: v.bgSurface, primaryColor: v.bgElevated, primaryTextColor: v.textPrimary, primaryBorderColor: v.borderStrong,
+    secondaryColor: v.bgBase, secondaryTextColor: v.textPrimary, secondaryBorderColor: v.borderSubtle,
+    tertiaryColor: v.bgBase, tertiaryTextColor: v.textPrimary, tertiaryBorderColor: v.borderSubtle,
+    mainBkg: v.bgElevated, nodeBorder: v.borderStrong, nodeTextColor: v.textPrimary,
+    lineColor: v.accent, textColor: v.textPrimary, titleColor: v.textPrimary, edgeLabelBackground: v.bgSurface,
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace", fontSize: '13px',
+  });
+
+  const buildDefs = (v) => {
+    const ARCH = `flowchart TD
+  OP(["operator<br/>python runner.py flows/X.yaml"])
+  SPEC["flows/*.yaml + loader.py<br/>playbook · oracle · metadata"]
+  RUN["runner.py · run_flow()<br/>step-by-step · measures each step"]
+  API{{"Claude computer-use<br/>claude-sonnet-4-6"}}
+  TOOLS["computer.* / macos.*<br/>reused from agent.py"]
+  SHOOT["screen.py · shoot()<br/>screenshot"]
+  EMIT["_extract_emit()<br/>parse final JSON"]
+  ORACLE{"oracle.run_oracle()"}
+  TV["oracles/tradingview.py<br/>machine: independent quote"]
+  PR["oracles/proton.py<br/>human: approval gate"]
+  PRICE["pricing.py<br/>verified $/MTok"]
+  DB[("runs.db<br/>runs · step_metrics · feedback")]
+  REPORT["report.py"]
+  HTML[/"docs/results.html"/]
+  FB["feedback.py<br/>human verdict"]
+
+  OP --> RUN
+  SPEC --> RUN
+  RUN -->|one sub-goal + screenshot| API
+  API -->|one action| TOOLS
+  TOOLS --> SHOOT
+  SHOOT -->|fresh screenshot| API
+  RUN --> EMIT
+  EMIT --> ORACLE
+  ORACLE --> TV
+  ORACLE --> PR
+  ORACLE -->|status + fact_match| DB
+  PRICE -.-> DB
+  DB --> REPORT
+  REPORT --> HTML
+  FB -.-> DB
+
+  click SPEC "../flows/loader.py" "flows/loader.py — validate() / load()" _blank
+  click RUN "../runner.py" "runner.py — run_flow() drives the playbook" _blank
+  click TOOLS "../agent.py" "agent.py — execute_tool(), computer/macos tools" _blank
+  click SHOOT "../screen.py" "screen.py — shoot(): screenshot helpers" _blank
+  click EMIT "../runner.py" "runner.py — _extract_emit(): parse the final JSON" _blank
+  click TV "../oracles/tradingview.py" "oracles/tradingview.py — evaluate() / fetch_spx_quote()" _blank
+  click PR "../oracles/proton.py" "oracles/proton.py — run_oracle(): human approval gate" _blank
+  click PRICE "../pricing.py" "pricing.py — cost_usd()" _blank
+  click DB "../metrics_db.py" "metrics_db.py — runs/step_metrics/feedback + aggregate()" _blank
+  click REPORT "../report.py" "report.py — gather() → CLI + results.html" _blank
+  click FB "../feedback.py" "feedback.py — record() a human verdict" _blank
+  classDef cross stroke:${v.accent},stroke-width:2px;
+  class TV,PR,ORACLE cross;`;
+
+    const LOOP = `flowchart TD
+  S(["spec loaded · loader.validate()"]) --> STEP
+  STEP["for each step:<br/>hand Claude one sub-goal + screenshot"]
+  STEP --> ACT{{"Claude: take an action,<br/>or STEP DONE?"}}
+  ACT -->|action| EXEC["execute_tool()<br/>click · type · macos"]
+  EXEC --> SHOT["screenshot ·<br/>record step tokens/time"]
+  SHOT --> ACT
+  ACT -->|STEP DONE| NEXT{"more steps?"}
+  NEXT -->|yes| STEP
+  NEXT -->|final step| EMIT["_extract_emit()<br/>parse emitted JSON"]
+  EMIT --> ORC["oracle.run_oracle()<br/>machine fact, or human gate"]
+  ORC --> ROW["write runs.db row<br/>+ final_report.json"]
+  ROW --> DONE(["pass / fail / error"])
+
+  click STEP "../runner.py" "runner.py — _run_step(): drive one sub-goal" _blank
+  click EXEC "../agent.py" "agent.py — execute_tool()" _blank
+  click EMIT "../runner.py" "runner.py — _extract_emit()" _blank
+  click ORC "../oracles/tradingview.py" "oracles/*.py — run_oracle()" _blank
+  click ROW "../metrics_db.py" "metrics_db.py — insert_run() / insert_step()" _blank
+  classDef gate stroke:${v.accent},stroke-width:2px;
+  class ORC,EMIT gate;`;
+    return { ARCH, LOOP };
+  };
+
+  let seq = 0;
+  const renderOne = async (targetId, def) => {
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      const { svg, bindFunctions } = await mermaid.render('mmd-' + (seq++), def);
+      el.innerHTML = svg;
+      if (bindFunctions) bindFunctions(el);
+    } catch (e) {
+      el.innerHTML = '<div class="mmd-fallback">diagram could not render (' + (e && e.message ? e.message : e) + '). The annotated diagram below is the same architecture.</div>';
+    }
+  };
+
+  window.renderMermaid = async () => {
+    const panel = document.getElementById('panel-technical');
+    if (!panel || panel.hidden) return;
+    const v = readVars();
+    mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'base',
+      themeVariables: themeVars(v),
+      flowchart: { curve: 'basis', htmlLabels: true, useMaxWidth: true, nodeSpacing: 45, rankSpacing: 55 } });
+    const { ARCH, LOOP } = buildDefs(v);
+    await renderOne('mmArch', ARCH);
+    await renderOne('mmLoop', LOOP);
+  };
+  window.renderMermaid();
+})();
+</script>
+</body>
+</html>

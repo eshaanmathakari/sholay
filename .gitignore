@@ -15,6 +15,13 @@ venv/
 # Each can be tens of MB of screenshots; keep them local, don't track.
 runs/
 
+# Metrics DB — local source-of-truth for the flow runner. Its numbers are already
+# baked into the committed docs/results.html (self-contained), and it embeds local
+# absolute run_dir paths, so keep it local and regenerate the report from it.
+runs.db
+runs.db-journal
+runs.db-wal
+
 # OS noise
 .DS_Store
 

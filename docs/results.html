@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>COA flow metrics</title><style>
+:root { --bg:#ffffff; --fg:#1a1a1a; --muted:#6b7280; --line:#e5e7eb; --card:#f9fafb; --accent:#b4532a; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#0f1115; --fg:#e8e8e8; --muted:#9aa0aa; --line:#262b33; --card:#161a21; --accent:#e08a5c; }
+}
+* { box-sizing: border-box; }
+body { background:var(--bg); color:var(--fg); font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; margin:0; padding:2.5rem; }
+h1 { font-size:1.6rem; margin:0 0 .25rem; }
+.sub { color:var(--muted); margin:0 0 2rem; font-size:.9rem; }
+h2 { font-size:1.1rem; margin:2rem 0 .75rem; }
+.cards { display:flex; flex-wrap:wrap; gap:1rem; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:1rem 1.25rem; min-width:200px; }
+.card .flow { font-weight:600; }
+.card .big { font-size:1.8rem; font-weight:700; }
+.card .row { color:var(--muted); font-size:.85rem; display:flex; justify-content:space-between; gap:1rem; }
+table { border-collapse:collapse; width:100%; margin-top:.5rem; font-variant-numeric:tabular-nums; }
+th,td { text-align:right; padding:.5rem .75rem; border-bottom:1px solid var(--line); }
+th:first-child, td:first-child { text-align:left; }
+th { color:var(--muted); font-weight:600; font-size:.8rem; text-transform:uppercase; letter-spacing:.03em; }
+.pass { color:#16a34a; } .fail { color:#dc2626; } .error { color:var(--accent); }
+.empty { color:var(--muted); padding:2rem 0; }
+.lede { font-size:1rem; max-width:62rem; margin:0 0 1.4rem; }
+.totals { display:flex; flex-wrap:wrap; gap:1rem; margin:0 0 1rem; }
+.stat { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:.7rem 1.1rem; min-width:118px; }
+.stat .n { font-size:1.5rem; font-weight:700; }
+.stat .l { color:var(--muted); font-size:.76rem; text-transform:uppercase; letter-spacing:.03em; }
+.prose { max-width:62rem; } .prose p { margin:.5rem 0; } .muted { color:var(--muted); }
+.pipe { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; margin:.6rem 0 1rem; }
+.pipe .box { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:.5rem .7rem; font-size:.82rem; font-weight:600; text-align:center; }
+.pipe .box small { display:block; font-weight:400; color:var(--muted); font-size:.72rem; margin-top:.15rem; }
+.pipe .arr { color:var(--accent); font-weight:700; }
+footer { color:var(--muted); font-size:.82rem; margin-top:2.5rem; border-top:1px solid var(--line); padding-top:1rem; }
+code { background:var(--card); border:1px solid var(--line); border-radius:5px; padding:.05rem .3rem; font-size:.85em; }
+.dists { display:flex; flex-direction:column; gap:.4rem; }
+.distrow { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:.9rem 1.1rem; }
+.distrow .flow { font-weight:600; } .distrow .metric { color:var(--muted); font-size:.8rem; margin-left:.5rem; }
+.distrow .diststat { color:var(--muted); font-size:.8rem; margin-top:.15rem; }
+.distgrid { display:grid; grid-template-columns:1fr 1fr; gap:1rem 1.5rem; align-items:end; margin-top:.5rem; }
+@media (max-width:640px) { .distgrid { grid-template-columns:1fr; } }
+svg.dist { width:100%; max-width:480px; height:auto; overflow:visible; font:11px ui-monospace,SFMono-Regular,monospace; }
+.dist .ax { stroke:var(--line); stroke-width:1.5; }
+.dist .pt { fill:var(--accent); fill-opacity:.85; }
+.dist .med { stroke:var(--fg); stroke-width:2; }
+.dist .mean { stroke:var(--muted); stroke-width:1.5; stroke-dasharray:3 2; }
+.dist .end, .dist .mlbl { fill:var(--muted); }
+.dist .med-t { fill:var(--fg); }
+</style></head>
+<body><h1>Computer-use agent — flow metrics</h1>
+<p class="sub">cost · accuracy · token usage, accumulated per run. Generated 2026-06-19T12:58:11</p>
+
+        <p class="lede">Three deterministic computer-use flows across different application types, each
+        monitored for cost, accuracy, and token usage. One row per run; the numbers accumulate over history.</p>
+        <div class="totals"><div class="stat"><div class="n">11</div><div class="l">runs</div></div><div class="stat"><div class="n">$11.1868</div><div class="l">total spend</div></div><div class="stat"><div class="n">3,520,223</div><div class="l">tokens</div></div><div class="stat"><div class="n">2</div><div class="l">flows</div></div><div class="stat"><div class="n">2</div><div class="l">app types</div></div></div>
+        <h2>Per-flow accuracy</h2>
+        <div class="cards"><div class="card"><div class="flow">proton_mark_read</div><div class="big">100.0%</div><div class="row"><span>3 runs</span><span>$0.6541/run</span></div><div class="row"><span>$0.6541/success</span><span>212514 tok</span></div><div class="row"><span>292.2s/run</span><span>16.3 steps</span></div><div class="row"><span>2 scored</span><span>1 infra err</span></div></div><div class="card"><div class="flow">tradingview_spx</div><div class="big">100.0%</div><div class="row"><span>8 runs</span><span>$1.1531/run</span></div><div class="row"><span>$1.1531/success</span><span>360335 tok</span></div><div class="row"><span>285.3s/run</span><span>24.0 steps</span></div><div class="row"><span>7 scored</span><span>1 infra err</span></div></div></div>
+        <h2>By app type (cross-type comparison)</h2>
+        <table><thead><tr><th>app type</th><th>runs</th><th>err</th><th>pass%</th><th>$/run</th>
+        <th>$/success</th><th>tokens</th><th>steps</th><th>time/run</th></tr></thead>
+        <tbody><tr><td>browser</td><td>8</td><td>1</td><td>100.0</td><td>$1.1531</td><td>$1.1531</td><td>360335</td><td>24.0</td><td>285.3s</td></tr>
+<tr><td>no_api</td><td>3</td><td>1</td><td>100.0</td><td>$0.6541</td><td>$0.6541</td><td>212514</td><td>16.3</td><td>292.2s</td></tr></tbody></table>
+        <h2>By flow</h2>
+        <table><thead><tr><th>flow</th><th>runs</th><th>err</th><th>pass%</th><th>$/run</th>
+        <th>$/success</th><th>tokens</th><th>steps</th><th>time/run</th></tr></thead>
+        <tbody><tr><td>proton_mark_read</td><td>3</td><td>1</td><td>100.0</td><td>$0.6541</td><td>$0.6541</td><td>212514</td><td>16.3</td><td>292.2s</td></tr>
+<tr><td>tradingview_spx</td><td>8</td><td>1</td><td>100.0</td><td>$1.1531</td><td>$1.1531</td><td>360335</td><td>24.0</td><td>285.3s</td></tr></tbody></table>
+        <h2>Run-to-run variability</h2><div class="prose"><p>The playbook is fixed, but the agent never walks the exact same path twice — the screen shifts, the model picks differently, so <strong>step count and wall-clock time drift run to run</strong>. Each dot is one run; the solid tick is the median, the dashed tick the mean. When the mean sits to the right of the median the flow is <em>right-skewed</em> — a few long runs (the pre-fix TradingView thrash, a Proton dialog that waited on a human) drag the average up.</p></div><div class="dists"><div class="distrow"><div><span class="flow">proton_mark_read</span></div><div class="distgrid"><div><div class="metric">steps / run</div><svg class="dist" viewBox="0 0 460 78" preserveAspectRatio="xMidYMid meet" role="img"><line class="ax" x1="18.0" y1="56" x2="442.0" y2="56"/><circle class="pt" cx="159.3" cy="50.0" r="3.4"/><circle class="pt" cx="159.3" cy="41.0" r="3.4"/><circle class="pt" cx="300.7" cy="50.0" r="3.4"/><line class="med" x1="159.3" y1="14.0" x2="159.3" y2="62.0"/><text class="med-t" x="159.3" y="10.0" text-anchor="middle">med 16</text><line class="mean" x1="201.7" y1="28.0" x2="201.7" y2="62.0"/><text class="mlbl" x="205.7" y="26.0" text-anchor="start">mean 16.3</text><text class="end" x="18.0" y="72.0" text-anchor="start">16</text><text class="end" x="442.0" y="72.0" text-anchor="end">17</text></svg><div class="diststat">3 runs · median 16 · mean 16.3 · range 16–17 · right-skewed (+2.12) — a few long runs pull the mean up</div></div><div><div class="metric">time / run (seconds)</div><svg class="dist" viewBox="0 0 460 78" preserveAspectRatio="xMidYMid meet" role="img"><line class="ax" x1="18.0" y1="56" x2="442.0" y2="56"/><circle class="pt" cx="53.3" cy="50.0" r="3.4"/><circle class="pt" cx="77.1" cy="50.0" r="3.4"/><circle class="pt" cx="406.7" cy="50.0" r="3.4"/><line class="med" x1="77.1" y1="14.0" x2="77.1" y2="62.0"/><text class="med-t" x="77.1" y="10.0" text-anchor="middle">med 174.4</text><line class="mean" x1="179.0" y1="28.0" x2="179.0" y2="62.0"/><text class="mlbl" x="183.0" y="26.0" text-anchor="start">mean 292.2</text><text class="end" x="18.0" y="72.0" text-anchor="start">147</text><text class="end" x="442.0" y="72.0" text-anchor="end">555.1</text></svg><div class="diststat">median 174.4s · mean 292.2s · range 147.0s–555.1s</div></div></div></div><div class="distrow"><div><span class="flow">tradingview_spx</span></div><div class="distgrid"><div><div class="metric">steps / run</div><svg class="dist" viewBox="0 0 460 78" preserveAspectRatio="xMidYMid meet" role="img"><line class="ax" x1="18.0" y1="56" x2="442.0" y2="56"/><circle class="pt" cx="53.3" cy="50.0" r="3.4"/><circle class="pt" cx="88.7" cy="50.0" r="3.4"/><circle class="pt" cx="88.7" cy="41.0" r="3.4"/><circle class="pt" cx="97.5" cy="50.0" r="3.4"/><circle class="pt" cx="150.5" cy="50.0" r="3.4"/><circle class="pt" cx="159.3" cy="50.0" r="3.4"/><circle class="pt" cx="230.0" cy="50.0" r="3.4"/><circle class="pt" cx="406.7" cy="50.0" r="3.4"/><line class="med" x1="124.0" y1="14.0" x2="124.0" y2="62.0"/><text class="med-t" x="124.0" y="10.0" text-anchor="middle">med 20</text><line class="mean" x1="159.3" y1="28.0" x2="159.3" y2="62.0"/><text class="mlbl" x="163.3" y="26.0" text-anchor="start">mean 24</text><text class="end" x="18.0" y="72.0" text-anchor="start">12</text><text class="end" x="442.0" y="72.0" text-anchor="end">52</text></svg><div class="diststat">8 runs · median 20.0 · mean 24.0 · range 12–52 · right-skewed (+0.99) — a few long runs pull the mean up</div></div><div><div class="metric">time / run (seconds)</div><svg class="dist" viewBox="0 0 460 78" preserveAspectRatio="xMidYMid meet" role="img"><line class="ax" x1="18.0" y1="56" x2="442.0" y2="56"/><circle class="pt" cx="53.3" cy="50.0" r="3.4"/><circle class="pt" cx="93.0" cy="50.0" r="3.4"/><circle class="pt" cx="93.4" cy="50.0" r="3.4"/><circle class="pt" cx="100.8" cy="50.0" r="3.4"/><circle class="pt" cx="146.8" cy="50.0" r="3.4"/><circle class="pt" cx="156.2" cy="50.0" r="3.4"/><circle class="pt" cx="247.1" cy="50.0" r="3.4"/><circle class="pt" cx="406.7" cy="50.0" r="3.4"/><line class="med" x1="123.8" y1="14.0" x2="123.8" y2="62.0"/><text class="med-t" x="123.8" y="10.0" text-anchor="middle">med 251.2</text><line class="mean" x1="162.2" y1="28.0" x2="162.2" y2="62.0"/><text class="mlbl" x="166.2" y="26.0" text-anchor="start">mean 285.3</text><text class="end" x="18.0" y="72.0" text-anchor="start">188.7</text><text class="end" x="442.0" y="72.0" text-anchor="end">502.3</text></svg><div class="diststat">median 251.2s · mean 285.3s · range 188.7s–502.3s</div></div></div></div></div>
+        
+        <h2>How it works</h2>
+        <div class="pipe">
+          <div class="box">YAML playbook<small>flows/*.yaml</small></div><div class="arr">&rarr;</div>
+          <div class="box">Runner<small>step-by-step</small></div><div class="arr">&rarr;</div>
+          <div class="box">Claude computer-use<small>screenshot &rarr; action</small></div><div class="arr">&rarr;</div>
+          <div class="box">Oracle<small>machine or human</small></div><div class="arr">&rarr;</div>
+          <div class="box">runs.db<small>cost &middot; tokens &middot; status</small></div><div class="arr">&rarr;</div>
+          <div class="box">This report</div>
+        </div>
+        <div class="prose">
+        <p>Each flow is a fixed, written-down playbook the agent executes step-by-step by looking at
+        the screen &mdash; no scripted clicks. Every run is scored by a per-flow <strong>oracle</strong>
+        and recorded as one row: cost, tokens, accuracy.</p>
+        <p><strong>The oracle is the independent answer key</strong>, chosen to fit the app type.
+        <strong>Machine-verified</strong> where a source of truth exists &mdash; the browser flow checks
+        the price the agent read off the chart against an independent market quote (&plusmn;0.5%).
+        <strong>Human-verified</strong> where none does &mdash; the no-API mail flow pops an approval
+        dialog and the reviewer's click is the verdict. Both still record the same cost/token metrics.</p>
+        </div>
+        
+        <h2>Cost &amp; usage</h2>
+        <div class="prose"><p>Cost comes from the API-reported token counts at verified
+        <code>claude-sonnet-4-6</code> rates; screenshot/image tokens are already inside these counts.</p></div>
+        <table style="max-width:30rem"><thead><tr><th>token class</th><th>$/MTok</th></tr></thead>
+        <tbody>
+        <tr><td>input (uncached)</td><td>3.00</td></tr>
+        <tr><td>output</td><td>15.00</td></tr>
+        <tr><td>cache write (5-min)</td><td>3.75</td></tr>
+        <tr><td>cache read</td><td>0.30</td></tr>
+        </tbody></table>
+        <div class="prose"><p class="muted"><strong>How to read the tables:</strong> <em>pass%</em> is
+        over <em>scored</em> runs only (pass &divide; (pass + fail)). An <code>error</code> means the
+        oracle <em>couldn't verify</em> (unreachable source, dialog timeout) &mdash; shown separately as
+        <em>err</em>, never counted as an accuracy failure. <em>$/success</em> = avg cost &divide;
+        pass-rate is the headline efficiency metric.</p></div>
+        <h2>Recent runs</h2>
+        <table><thead><tr><th>flow</th><th>app type</th><th>status</th><th>cost</th>
+        <th>tokens</th><th>steps</th><th>latency</th><th>when</th></tr></thead>
+        <tbody><tr><td>proton_mark_read</td><td>no_api</td><td class="pass">pass</td><td>$0.6421</td><td>209573</td><td>16</td><td>174.4s</td><td>2026-06-18T10:16:58</td></tr><tr><td>tradingview_spx</td><td>browser</td><td class="pass">pass</td><td>$0.6039</td><td>196525</td><td>12</td><td>188.7s</td><td>2026-06-18T10:12:01</td></tr><tr><td>proton_mark_read</td><td>no_api</td><td class="pass">pass</td><td>$0.6364</td><td>207136</td><td>16</td><td>147.0s</td><td>2026-06-16T22:19:22</td></tr><tr><td>proton_mark_read</td><td>no_api</td><td class="error">error</td><td>$0.6838</td><td>220833</td><td>17</td><td>555.1s</td><td>2026-06-16T22:16:26</td></tr><tr><td>tradingview_spx</td><td>browser</td><td class="pass">pass</td><td>$1.4990</td><td>471757</td><td>32</td><td>360.7s</td><td>2026-06-16T20:27:35</td></tr><tr><td>tradingview_spx</td><td>browser</td><td class="pass">pass</td><td>$1.1118</td><td>349489</td><td>24</td><td>280.0s</td><td>2026-06-16T20:21:32</td></tr><tr><td>tradingview_spx</td><td>browser</td><td class="pass">pass</td><td>$1.0293</td><td>327367</td><td>23</td><td>271.7s</td><td>2026-06-16T20:16:50</td></tr><tr><td>tradingview_spx</td><td>browser</td><td class="pass">pass</td><td>$0.7817</td><td>251421</td><td>17</td><td>230.8s</td><td>2026-06-16T20:12:16</td></tr><tr><td>tradingview_spx</td><td>browser</td><td class="pass">pass</td><td>$0.7304</td><td>236692</td><td>16</td><td>224.3s</td><td>2026-06-16T18:30:01</td></tr><tr><td>tradingview_spx</td><td>browser</td><td class="pass">pass</td><td>$0.7340</td><td>236949</td><td>16</td><td>223.9s</td><td>2026-06-16T18:11:09</td></tr><tr><td>tradingview_spx</td><td>browser</td><td class="error">error</td><td>$2.7343</td><td>812481</td><td>52</td><td>502.3s</td><td>2026-06-16T15:00:57</td></tr></tbody></table>
+        <footer>Generated by <code>report.py</code> from <code>runs.db</code> &middot; architecture &amp;
+        design notes: <code>docs/ARCHITECTURE.md</code>, <code>docs/PLAN.md</code></footer>
+        
+</body></html>

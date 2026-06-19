@@ -1,0 +1,42 @@
+# Flow #3 — Proton Mail (native macOS app, no public API). Demo flow: the agent marks the
+# top 5 inbox emails read. With no API to verify against, the human approval gate IS the
+# oracle (oracles/proton.py → review.request_final_review). See docs/PLAN.md §7.2 / §11.
+name: proton_mark_read
+app_type: no_api
+model: claude-sonnet-4-6
+mode: demo
+steps_expected: 5
+
+oracle: proton
+oracle_config:
+  app_name: "Proton Mail"
+  count: 5                  # how many top emails to mark read
+
+# The final step emits these so the approval dialog can summarize what was done.
+emit_schema: [marked_read, unread_before, unread_after]
+
+steps:
+  - id: open_app
+    goal: >
+      Activate the "Proton Mail" macOS app and bring it to the foreground — use the macos
+      tool: activate_app with app_name "Proton Mail". It is already logged in. Do NOT type
+      any password; if a password / Touch ID / 2FA prompt appears, STOP.
+  - id: open_inbox
+    goal: >
+      Make sure the Inbox folder is selected and the message list is visible. Note the unread
+      count shown next to "Inbox" in the sidebar (you'll report it later). Dismiss any popups.
+  - id: select_top5
+    goal: >
+      Select the 5 emails at the very top of the Inbox list, one by one. Hover over each row
+      and click its selection checkbox/circle — do NOT open/preview the email, just select it.
+      Select exactly 5.
+  - id: mark_read
+    goal: >
+      With the 5 emails selected, click the "Mark as read" button in the toolbar (the
+      opened-envelope icon) if available. If there is no bulk button, mark each of the 5 read
+      individually (right-click → Mark as read, or the per-row mark-as-read control).
+  - id: confirm_emit
+    goal: >
+      Confirm the 5 emails now show as read (no longer bold) and read the Inbox unread count
+      again. Emit a JSON object with keys: marked_read (a list of {sender, subject} for the 5
+      emails you marked read), unread_before (the unread count before), unread_after (now).
