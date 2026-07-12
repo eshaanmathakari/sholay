@@ -14,6 +14,7 @@ import sys
 from datetime import datetime
 
 import metrics_db
+import pricing
 
 DEFAULT_HTML_OUT = "docs/results.html"
 
@@ -378,17 +379,34 @@ def render_html(data: dict) -> str:
         <strong>Human-verified</strong> where none does &mdash; the no-API mail flow pops an approval
         dialog and the reviewer's click is the verdict. Both still record the same cost/token metrics.</p>
         </div>"""
-        cost_usage = """
+        # Render the $/MTok table straight from pricing.PRICES so the dashboard
+        # can never drift from the rates actually used to compute cost_usd.
+        _rate_labels = [
+            ("input_tokens", "input (uncached)"),
+            ("output_tokens", "output"),
+            ("cache_creation_input_tokens", "cache write (5-min)"),
+            ("cache_read_input_tokens", "cache read"),
+        ]
+        _models = list(pricing.PRICES)
+        _head = "".join(f"<th>{html.escape(m)}</th>" for m in _models)
+        _rows = "".join(
+            "<tr><td>" + label + "</td>"
+            + "".join(f"<td>{pricing.PRICES[m][field]:.2f}</td>" for m in _models)
+            + "</tr>"
+            for field, label in _rate_labels
+        )
+        cost_usage = f"""
         <h2>Cost &amp; usage</h2>
         <div class="prose"><p>Cost comes from the API-reported token counts at verified
-        <code>claude-sonnet-4-6</code> rates; screenshot/image tokens are already inside these counts.</p></div>
-        <table style="max-width:30rem"><thead><tr><th>token class</th><th>$/MTok</th></tr></thead>
+        per-model rates (from <code>pricing.py</code>; the default is
+        <code>claude-sonnet-4-6</code>, with <code>claude-sonnet-5</code> also priced at
+        introductory rates through 2026-08-31); screenshot/image tokens are already inside
+        these counts.</p></div>
+        <table style="max-width:38rem"><thead><tr><th>token class ($/MTok)</th>{_head}</tr></thead>
         <tbody>
-        <tr><td>input (uncached)</td><td>3.00</td></tr>
-        <tr><td>output</td><td>15.00</td></tr>
-        <tr><td>cache write (5-min)</td><td>3.75</td></tr>
-        <tr><td>cache read</td><td>0.30</td></tr>
-        </tbody></table>
+        {_rows}
+        </tbody></table>"""
+        cost_usage += """
         <div class="prose"><p class="muted"><strong>How to read the tables:</strong> <em>pass%</em> is
         over <em>scored</em> runs only (pass &divide; (pass + fail)). An <code>error</code> means the
         oracle <em>couldn't verify</em> (unreachable source, dialog timeout) &mdash; shown separately as
