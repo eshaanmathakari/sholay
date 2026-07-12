@@ -6,7 +6,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pricing
 
-MODEL = "claude-sonnet-4-6"
+MODEL = "claude-sonnet-4-6"       # the agent's default model
+MODEL_S5 = "claude-sonnet-5"      # available option (intro pricing through 2026-08-31)
 
 
 def test_known_cost_matches_hand_computed():
@@ -19,6 +20,25 @@ def test_known_cost_matches_hand_computed():
     # (200000*3 + 5000*15 + 50000*3.75 + 1000000*0.30) / 1e6
     expected = (600_000 + 75_000 + 187_500 + 300_000) / 1_000_000  # 1.1625
     assert abs(pricing.cost_usd(usage, MODEL) - expected) < 1e-9
+
+
+def test_sonnet5_intro_cost_matches_hand_computed():
+    usage = {
+        "input_tokens": 200_000,
+        "output_tokens": 5_000,
+        "cache_creation_input_tokens": 50_000,
+        "cache_read_input_tokens": 1_000_000,
+    }
+    # (200000*2 + 5000*10 + 50000*2.50 + 1000000*0.20) / 1e6
+    expected = (400_000 + 50_000 + 125_000 + 200_000) / 1_000_000  # 0.775
+    assert abs(pricing.cost_usd(usage, MODEL_S5) - expected) < 1e-9
+
+
+def test_both_agent_models_are_priced():
+    # The agent's default model and the alternate priced option must both stay
+    # in PRICES — cost_usd raises KeyError for an unpriced model.
+    assert MODEL in pricing.PRICES
+    assert MODEL_S5 in pricing.PRICES
 
 
 def test_missing_fields_count_as_zero():

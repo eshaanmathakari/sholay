@@ -1,7 +1,9 @@
 """Verified per-model token pricing and per-run cost computation.
 
-Prices are USD per 1,000,000 tokens, taken from the Claude API pricing reference
-for `claude-sonnet-4-6` (the model the agent runs). Cost is computed from the REAL
+Prices are USD per 1,000,000 tokens, taken from the Claude API pricing reference.
+The agent's default model is `claude-sonnet-4-6`; a verified `claude-sonnet-5` entry
+is kept alongside it (introductory rates through 2026-08-31) so switching the default
+is a one-line change that reprices correctly. Cost is computed from the REAL
 measured token counts the agent records each run (input / output / cache read /
 cache write), so there is no estimation here — just a lookup and a multiply.
 Screenshot/image tokens are already inside the API-reported input counts.
@@ -15,11 +17,23 @@ historical row when `report.py` recomputes, and every future run.
 # Cache write is the 5-minute ephemeral TTL the agent uses (1.25x input); a 1h
 # TTL would be 2x (6.00). Cache read is ~0.1x input.
 PRICES = {
+    # Default model — verified against the Claude API pricing reference.
     "claude-sonnet-4-6": {
         "input_tokens": 3.00,
         "output_tokens": 15.00,
         "cache_creation_input_tokens": 3.75,   # 5-min TTL write (1.25 x input)
         "cache_read_input_tokens": 0.30,        # cache read (~0.1 x input)
+    },
+    # Available option (not the default). Verified 2026-07-06: INTRODUCTORY rates,
+    # in effect through 2026-08-31. On 2026-09-01 the sticker price takes over
+    # ($3.00 / $15.00, identical to 4.6 above) — update this entry then. report.py
+    # reprices historical rows from this table, so a rate edit here reprices any
+    # past rows recorded under this model too.
+    "claude-sonnet-5": {
+        "input_tokens": 2.00,
+        "output_tokens": 10.00,
+        "cache_creation_input_tokens": 2.50,   # 5-min TTL write (1.25 x input)
+        "cache_read_input_tokens": 0.20,        # cache read (~0.1 x input)
     },
 }
 
