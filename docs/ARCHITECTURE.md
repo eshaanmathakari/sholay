@@ -14,7 +14,7 @@ A small harness that runs **predefined, written-down flows** on a real macOS des
 vision-driven computer-use agent (Claude `claude-sonnet-4-6`), and **measures every run** for
 cost, accuracy, and token usage. It inverts the predecessor system's "navigates however it
 wants" autonomy into **three deterministic flows across three app *types*** (browser, no-API,
-legacy), each scored by a per-flow **oracle** and recorded one-row-per-run in SQLite.
+multi-app), each scored by a per-flow **oracle** and recorded one-row-per-run in SQLite.
 
 The headline question it answers, per flow and per app-type: *how reliable is it, what does a run
 cost, and how many tokens does it burn?*
@@ -58,10 +58,12 @@ flowchart TD
     runner -->|final emit JSON| oracle
     subgraph oracles [oracles/* — one verifier per flow]
       tv[tradingview.py<br/>machine: independent quote]
+      gh[github_pr.py<br/>machine: GitHub API + human gate]
       pr[proton.py<br/>human: Gate-C dialog]
     end
     oracle{oracle.run_oracle}
     oracle --> tv
+    oracle --> gh
     oracle --> pr
 
     oracle -->|status + fact_match| db[(runs.db<br/>runs · step_metrics · feedback)]
@@ -87,7 +89,7 @@ flowchart TD
 | `oracles/tradingview.py` | — | **Machine oracle**: multi-source quote fetch + structural checks. `evaluate()` pure. |
 | `oracles/proton.py` | — | **Human-gate oracle**: pops `review.request_final_review`; the human's click is the status. |
 | `metrics_db.py` | 144 | SQLite store (`runs` / `step_metrics` / `feedback`) + `insert_*` + `aggregate()`. Stdlib only. |
-| `pricing.py` | 38 | Verified `claude-sonnet-4-6` `$/MTok` table + `cost_usd(usage, model)`. |
+| `pricing.py` | 51 | Verified per-model `$/MTok` table (`claude-sonnet-5` intro rates + legacy `claude-sonnet-4-6`) + `cost_usd(usage, model)`. |
 | `report.py` | 203 | One query pass → CLI markdown table **and** `docs/results.html` (cross-app-type comparison). |
 | `feedback.py` | 64 | Capture-only human verdict (may override the oracle) + notes → `feedback` table. |
 | `agent.py` | 568 | Predecessor agent: vision loop, native tools, HITL gates. `runner.py` reuses its primitives. |
@@ -122,11 +124,14 @@ or already present.
 - **`step_metrics`** — per-step granular tokens/time/retries.
 - **`feedback`** — human verdict + notes, linked to a run; never overwrites `runs.status`.
 
-**Cost** (`pricing.py`, verified `claude-sonnet-4-6` rates, `$/MTok`):
+**Cost** (`pricing.py`, verified `$/MTok`). The default is **`claude-sonnet-4-6`**;
+`claude-sonnet-5` is also priced (introductory rates through 2026-08-31) so switching the
+default reprices cleanly:
 
-| Input | Output | Cache write (5-min) | Cache read |
-|---:|---:|---:|---:|
-| 3.00 | 15.00 | 3.75 | 0.30 |
+| Model | Input | Output | Cache write (5-min) | Cache read |
+|---|---:|---:|---:|---:|
+| `claude-sonnet-4-6` (default) | 3.00 | 15.00 | 3.75 | 0.30 |
+| `claude-sonnet-5` (option, intro) | 2.00 | 10.00 | 2.50 | 0.20 |
 
 `cost_usd = (in·3 + out·15 + cache_write·3.75 + cache_read·0.30) / 1e6`. Image/screenshot tokens are
 already inside the API-reported counts. Headline efficiency metric: **`$ / successful run` =
@@ -240,7 +245,8 @@ Abort a live run by slamming the cursor into a screen corner (pyautogui FAILSAFE
 3. Run it. The runner, metrics, pricing, and report pick it up automatically — that's how Flow #3
    landed with zero changes to `runner.py` / `metrics_db.py` / `report.py`.
 
-The legacy app (#2) is exactly this drop-in once the app is chosen.
+Flow #2 (`github_notion_intake`, multi-app) landed as exactly this drop-in — one YAML + one
+oracle, zero framework changes. The parked legacy-app flow would be the same again.
 
 ---
 
@@ -307,8 +313,8 @@ are required for the two demo flows.**
 `rm`, `mv /`, `chmod -R`, `chown -R`, `diskutil erase`, and anything outside a read-only allow-list
 (`hdiutil`, `open`, `osascript`, `ls`, `mdfind`, `mdls`, `pwd`, `whoami`, `defaults`). The *only* path
 that can ever prompt for an admin password is the optional `install_app_from_dmg()` helper (it copies a
-`.app` into `/Applications` via `ditto`) — and that is used **only by the not-yet-built legacy app #2**,
-never by the browser or Proton flows.
+`.app` into `/Applications` via `ditto`) — and that is used **only by the parked legacy-app flow**,
+never by the browser, multi-app, or Proton flows.
 
 **First-run gotchas**
 - macOS shows each permission prompt only when the capability is first exercised, and a freshly granted

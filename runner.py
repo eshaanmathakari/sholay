@@ -47,6 +47,18 @@ Rules:
 - Use the `macos` tool for reliable host primitives (activate an app, open a known path)
   when that is more reliable than clicking. Do not rely on Spotlight / cmd+space.
 - Dismiss cookie/login/popup overlays that block the task.
+- Typing: enter whole strings with ONE `type` action. Do NOT press individual letter keys.
+  To fix/replace a field's text, click the field once, press key `cmd+a` to select all, then
+  `type` the correct value in one go — never delete character-by-character.
+- Recovery: if an unexpected panel or overlay appears (Control Center, emoji picker, Spotlight,
+  a right-click menu, a PDF/attachment preview), press key `escape` ONCE (or click an empty
+  area of the target app), then continue. Do NOT keep typing into it.
+- Focus: before typing into a field or cell, click directly on it first so keystrokes can't
+  leak to another app as system shortcuts.
+- Only fill existing fields and click existing controls. NEVER create, rename, or delete a file,
+  a database column/property, or an app setting — if something you expect is missing, do not
+  build it; note it and do the best you can with what exists.
+- Do not open email attachments or click links.
 - If a password / Touch ID / system security prompt appears, STOP. Do not type any password.
 - When the CURRENT STEP's goal is achieved, STOP taking actions and end your message with the
   exact token on its own line: STEP DONE

@@ -254,7 +254,7 @@
       <tbody>
         <tr><td class="mono">tradingview_spx</td><td>browser</td><td><span class="badge machine">machine-verified</span></td><td>fetch an independent S&amp;P 500 quote, check the agent's read close within ±0.5%</td></tr>
         <tr><td class="mono">proton_mark_read</td><td>no_api</td><td><span class="badge human">human-verified</span></td><td>no API to check against → an approval dialog pops; the reviewer's click is the verdict</td></tr>
-        <tr><td class="mono">(legacy app)</td><td>legacy</td><td><span class="badge pending">pending</span></td><td>drop-in once the app is chosen — a YAML + an oracle</td></tr>
+        <tr><td class="mono">github_notion_intake</td><td>multi_app</td><td><span class="badge machine">machine + human</span></td><td>GitHub API machine-verifies every PR the agent read/logged; the Notion rows + invoice emails are a human gate (no Notion key needed)</td></tr>
       </tbody>
     </table>
   </div>
@@ -267,7 +267,7 @@
 <section id="flows" class="mount">
   <div class="section-head">
     <div class="section-num">03 / the flows</div>
-    <h2>Two built, one drop-in away.</h2>
+    <h2>Three built — one per app type.</h2>
   </div>
   <div class="grid">
     <div class="card tilt cross">
@@ -281,9 +281,9 @@
       <p>Activate the <em>native</em> Proton Mail app → select the top 5 inbox emails → "Mark as read." With no API to verify a mailbox, the human approval gate is the oracle. Ran green live: top-5 marked read, unread count dropped exactly as expected.</p>
     </div>
     <div class="card tilt">
-      <div class="head"><h3>Flow #2 — legacy app</h3><span class="meta">legacy · pending</span></div>
-      <div class="role">To be chosen</div>
-      <p>The third app type. Adding it is the same drop-in as the others: a <span class="mono">flows/&lt;name&gt;.yaml</span> playbook + an <span class="mono">oracles/&lt;name&gt;.py</span> verifier — no framework changes. It fills the third column of the comparison.</p>
+      <div class="head"><h3>Flow #2 — GitHub PRs + invoices → Notion</h3><span class="meta">multi_app · demo</span></div>
+      <div class="role">Machine + human verified</div>
+      <p>PRs are opened on the repo <em>moments before the run</em> — the agent doesn't know their numbers or titles. It reads every open PR in Brave and logs one Notion row each, then reads the <em>invoice/billing emails</em> in Proton and logs those too — consolidating two systems that don't talk to each other into one Notion tracker. The <em>GitHub API</em> machine-verifies every PR the agent read; the Notion rows and invoice classification are human-gated (email has no API). Landed as the same drop-in as the others: one YAML + one oracle, zero framework changes.</p>
     </div>
   </div>
 </section>
@@ -504,7 +504,7 @@
     <div>
       <div class="callout" style="margin-top:0;">
         <span class="pin">no sudo</span>
-        <span class="body"><span class="mono">native_actions.safe_shell()</span> refuses <span class="mono">sudo</span>, <span class="mono">rm</span>, <span class="mono">mv /</span>, <span class="mono">chmod/chown -R</span>, <span class="mono">diskutil erase</span>, and anything outside a read-only allow-list. The <b>only</b> step that can ever ask for an admin password is the optional DMG-install helper for the not-yet-built <b>legacy app #2</b> — never the browser or Proton flows.</span>
+        <span class="body"><span class="mono">native_actions.safe_shell()</span> refuses <span class="mono">sudo</span>, <span class="mono">rm</span>, <span class="mono">mv /</span>, <span class="mono">chmod/chown -R</span>, <span class="mono">diskutil erase</span>, and anything outside a read-only allow-list. The <b>only</b> step that can ever ask for an admin password is the optional DMG-install helper for the parked <b>legacy-app flow</b> — never the browser or Proton flows.</span>
       </div>
       <p class="muted" style="font-size:0.82rem; margin-top:16px; line-height:1.6;">
         <strong>First-run gotcha:</strong> macOS only prompts when a capability is first used, and a freshly

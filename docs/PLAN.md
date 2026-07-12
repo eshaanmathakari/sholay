@@ -31,8 +31,13 @@ what does a run cost, and how many tokens does it burn?"*
 - **Flow #1 — TradingView (browser):** fully built as the reference implementation.
 
 ### Deferred (decide before building #2/#3)
-- **Flow #2 — legacy app:** *still choosing the app.* GraphicConverter 12 was a candidate;
-  user is looking for the right legacy app. Phase 2 blocked on this.
+- **Flow #2 — BUILT (2026-07): `github_notion_intake` (multi-app).** The legacy-app slot was
+  repurposed for a manager-requested *dynamic, multi-app* workflow: PRs opened live on the repo
+  → agent reads every open PR in Brave → logs one Notion row each → reads the invoice/billing
+  emails in Proton → logs those too, consolidating two systems into one Notion tracker. Oracle:
+  the GitHub API machine-verifies every PR the agent read; the Notion rows + invoice
+  classification are human-gated (email has no API; Notion populated by vision, no key needed).
+  Legacy app (GraphicConverter 12 was a candidate) is parked indefinitely.
 - **Flow #3 — app without a public API:** **BUILT — Proton Mail (native macOS app).** `demo`
   flow: mark the top-5 inbox emails read; human-gate oracle (see §7.2).
 
@@ -131,15 +136,16 @@ FROM runs GROUP BY flow;
 
 ## 6. Cost model (verified)
 
-`claude-sonnet-4-6`, from the Claude API pricing reference:
+Default model **`claude-sonnet-4-6`**, from the Claude API pricing reference.
+`claude-sonnet-5` is also priced in `pricing.py` (introductory rates through
+2026-08-31) so switching the default is a one-line change that reprices correctly:
 
-| Token class | $ / MTok |
-|---|---|
-| Input (uncached) | 3.00 |
-| Output | 15.00 |
-| Cache write (5-min TTL — current system) | 3.75 |
-| Cache write (1-h TTL) | 6.00 |
-| Cache read | 0.30 |
+| Token class | sonnet-4-6 (default) $ / MTok | sonnet-5 (option, intro) $ / MTok |
+|---|---|---|
+| Input (uncached) | 3.00 | 2.00 |
+| Output | 15.00 | 10.00 |
+| Cache write (5-min TTL) | 3.75 | 2.50 |
+| Cache read | 0.30 | 0.20 |
 
 ```
 cost_usd = ( in_tok*3.00 + out_tok*15.00 + cache_write*3.75 + cache_read*0.30 ) / 1e6
@@ -263,7 +269,8 @@ Each component must pass these before it's considered done.
 **Phase 2 — Flows #2 & #3:**
 6. Each has a YAML spec + an oracle and passes its own T4/T5 equivalents. **Flow #3 (Proton) is
    a `demo` flow** — human-gated, ~2 runs, *not* a ≥5-run measured-accuracy flow (see §7.2).
-   Flow #2 (legacy, app still unchosen) keeps the ≥5-measured-runs bar.
+   **Flow #2 (github_pr, multi-app) is also a `demo` flow** — its input (a live PR) is created
+   fresh per run, so repeat-run accuracy stats apply per-demo rather than as a ≥5-run series.
 7. `results.html` shows the cross-app-type comparison the manager asked for — **browser + no_api
    live**; the legacy column lands when app #2 is chosen.
 
@@ -277,7 +284,8 @@ Each component must pass these before it's considered done.
 4. ✅ `feedback.py` (T6) + `report.py` → `docs/results.html` (T7) — **done, 7 tests green; report verified end-to-end.**
 5. ⏳ Run Flow #1 ≥5× (live, on the Mac); review numbers; hit Phase-1 exit criteria. **Blocked on the live run only.**
 6. ✅ Proton #3 built as a native-app `demo` flow (mark top-5 read, human-gate oracle); ran green live.
-7. ⏳ *(later)* Pick legacy app #2 → add spec + oracle → its Phase-2 exit criteria.
+7. ✅ Flow #2 built as `github_notion_intake` (multi-app `demo` flow: open PRs + Proton invoice
+   emails → one Notion tracker; GitHub-API machine oracle + human gate). Legacy app parked.
 
 > Build status: 64/64 offline tests pass. Only the live runs (T5 / §9 criterion 2) remain for Phase 1 — they need the Mac + an API key and can't be run autonomously here. Open TODOs noted in code: `demo`-mode gates aren't wired into the runner yet (use `agent.py` for the gated demo); `misclicks` is a best-effort proxy (counts step retries).
 

@@ -2,9 +2,12 @@
 # demo.sh — run the COA measurement flows back-to-back for a single screen recording.
 # Beat-by-beat narration runbook: docs/DEMO.md. Start your screen recorder, then run this.
 #
-#   ./demo.sh                both flows + report (default), with narration pauses
+#   ./demo.sh                both classic flows + report (default), with narration pauses
 #   ./demo.sh --tradingview  only Flow #1 (browser, machine-scored)
 #   ./demo.sh --proton       only Flow #3 (no_api, human-gated — click "pass")
+#   ./demo.sh --github       only Flow #2 (multi_app: GitHub PRs + Proton invoices → Notion).
+#                            OPEN PR(s) ON THE REPO FIRST — those live PRs are the dynamic input;
+#                            have a few invoice/billing emails in the Proton inbox. No extra keys.
 #   ./demo.sh --no-pause     skip the narration pauses (unattended)
 #
 # Notes:
@@ -19,11 +22,12 @@ cd "$(dirname "$0")"
 PY="${PYTHON:-python}"
 command -v "$PY" >/dev/null 2>&1 || PY="python3"
 
-RUN_TV=1; RUN_PR=1; PAUSE=1
+RUN_TV=1; RUN_PR=1; RUN_GH=0; PAUSE=1
 for arg in "$@"; do
   case "$arg" in
-    --tradingview) RUN_TV=1; RUN_PR=0 ;;
-    --proton)      RUN_TV=0; RUN_PR=1 ;;
+    --tradingview) RUN_TV=1; RUN_PR=0; RUN_GH=0 ;;
+    --proton)      RUN_TV=0; RUN_PR=1; RUN_GH=0 ;;
+    --github)      RUN_TV=0; RUN_PR=0; RUN_GH=1 ;;
     --no-pause)    PAUSE=0 ;;
     -h|--help)     grep '^#' "$0" | grep -v '^#!' | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown arg: $arg (try --help)"; exit 2 ;;
@@ -48,6 +52,15 @@ if [ "$RUN_TV" -eq 1 ]; then
   bar "regenerating the dashboard"
   $PY report.py
   beat "STATUS: pass = the agent's close matched the independent quote within ±0.5%."
+fi
+
+if [ "$RUN_GH" -eq 1 ]; then
+  bar "Flow #2 — GitHub PRs + Proton invoices → Notion (multi_app · machine + human)"
+  beat "PRs were JUST opened on the repo — the agent doesn't know their numbers or titles. It reads every open PR in Brave and logs one row each to the Notion 'COA test' database, then reads the invoice/billing emails in Proton and logs those too — two systems consolidated into one tracker. The oracle machine-verifies every PR read against the GitHub API; you confirm the Notion rows and invoices."
+  $PY -u runner.py flows/github_pr.yaml --max-step-actions 30 || echo "(runner exited non-zero; continuing)"
+  bar "regenerating the dashboard"
+  $PY report.py
+  beat "STATUS: pass = every PR the agent read matched GitHub's record AND you approved the Notion rows + invoices."
 fi
 
 if [ "$RUN_PR" -eq 1 ]; then

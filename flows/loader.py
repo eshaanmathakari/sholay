@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Union
 
-APP_TYPES = {"browser", "legacy", "no_api"}
+APP_TYPES = {"browser", "legacy", "no_api", "multi_app"}
 MODES = {"measure", "demo"}
 
 
