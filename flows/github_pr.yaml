@@ -1,0 +1,100 @@
+# Flow #2 — GitHub PRs + Proton invoices → one Notion tracker (multi-app workflow).
+# The enterprise claim this flow proves: the agent is "swivel-chair integration" — it
+# consolidates work items from two systems that share no integration (a code host and an
+# inbox) into one Notion system-of-record. PRs are opened on the repo moments before the
+# run (the dynamic input: the agent doesn't know their numbers/titles in advance), and the
+# inbox holds real invoice/billing emails. The agent reads both and logs a row per item.
+#
+# Verification is mixed, one leg per capability:
+#   * MACHINE — the GitHub REST API (public repo, no key) independently confirms every PR
+#     the agent read and logged (number/title/author). That's the oracle's fact_match.
+#   * HUMAN — the invoice→Notion leg is human-gated: email has no API to verify against, so
+#     the reviewer confirms the Notion rows (both sources) and that the invoices are real
+#     billing emails. Same pattern as the Proton flow (oracles/proton.py).
+#
+# Prerequisites (see .env.example):
+#   * Brave, the Notion desktop app, and Proton Mail all open and logged in.
+#   * The Notion "COA test" database ALREADY has these properties (the agent must NOT create
+#     them): Name (title), Source (select, with options "GitHub PR" and "Invoice"),
+#     Status (select, with option "Pending"). A Detail (text) column is optional.
+#   * One or more open PRs on the repo (open them live right before running), and a few
+#     invoice/billing emails already in the Proton inbox.
+name: github_notion_intake
+app_type: multi_app
+model: claude-sonnet-4-6
+mode: demo
+browser: Brave Browser
+steps_expected: 8
+
+oracle: github_pr
+oracle_config:
+  repo: eshaanmathakari/sholay      # the GitHub repo the demo PRs are opened on
+  status_value: Pending
+  source_pr: "GitHub PR"            # Notion Source value for a PR row
+  source_invoice: "Invoice"        # Notion Source value for an invoice row
+
+# The final step must emit exactly these fields (checked by the oracle / runner).
+# prs: [{number, title, author}], invoices: [{sender, subject}].
+emit_schema: [prs, invoices, notion_pr_rows_added, notion_invoice_rows_added]
+
+steps:
+  - id: focus_github
+    goal: >
+      Bring the Brave browser to the foreground — use the macos tool: activate_app with
+      app_name "Brave Browser". The open pull-requests list should already be showing. If it
+      is not, open the URL directly via the macos tool — run_applescript: tell application
+      "Brave Browser" to open location "https://github.com/eshaanmathakari/sholay/pulls".
+      Do NOT type the URL by hand. This step is done as soon as the open-PR list is visible.
+  - id: read_prs
+    goal: >
+      Read EVERY open pull request in the list. For each one, note exactly: the PR number
+      (the #N), the full title, and the author's GitHub username (shown as "<user> wants to
+      merge …" or on the list row). Remember all of them — you'll log one Notion row per PR.
+      You do not need to open individual PRs if the author is visible on the list row.
+  - id: open_notion
+    goal: >
+      Activate the "Notion" macOS desktop app (macos tool: activate_app, app_name "Notion").
+      It is already logged in — do NOT type any password. Make sure the database named
+      "COA test" is open in its TABLE view (use the sidebar, or Notion quick-search: press
+      key `cmd+p`, type "COA test", press key `enter`). The database ALREADY has the columns
+      Name, Source, Status (and maybe Detail). DO NOT create, rename, or edit any column —
+      you will only add rows and fill existing cells.
+  - id: log_prs
+    goal: >
+      For EACH PR you read, add one new row to the "COA test" table. Recipe per row:
+      (1) click the "+ New" button at the bottom-left of the table (below the last row) —
+      this creates a row with the Name/title cell focused; (2) `type` the PR title, then
+      press key `escape` to commit it; (3) click the row's "Source" cell, and in the dropdown
+      that appears click the EXISTING option "GitHub PR" (do not create a new option), then
+      press key `escape`; (4) click the row's "Status" cell and click the EXISTING option
+      "Pending", then press key `escape`. Repeat for every PR. If a cell is hard to hit,
+      hover the row and click its "OPEN" button to edit the row as a page, then fill the
+      Name / Source / Status fields there. Never create or rename a column.
+  - id: open_proton
+    goal: >
+      Activate the "Proton Mail" macOS app (macos tool: activate_app, app_name "Proton
+      Mail"). It is already logged in. Do NOT type any password; if a password / Touch ID /
+      2FA prompt appears, STOP.
+  - id: find_invoices
+    goal: >
+      Find the invoice / billing emails. Click the search box, `type` "invoice", press key
+      `enter`, and read each result's sender and subject from the list (do NOT open the email
+      body or any attachment). Then click the search box, press key `cmd+a`, `type` "receipt",
+      press key `enter`, and add any further distinct billing-related emails. Build a list of
+      the distinct invoice/billing emails you found (sender + subject each). If a system panel
+      opens by mistake, press key `escape` once and continue.
+  - id: log_invoices
+    goal: >
+      Switch back to the "Notion" app (macos tool: activate_app "Notion") and the "COA test"
+      table. For EACH invoice/billing email you found, add one new row using the same recipe
+      as the PR rows: "+ New" → `type` the email subject as Name → key `escape` → click
+      "Source" cell → click the EXISTING option "Invoice" → key `escape` → click "Status"
+      cell → click "Pending" → key `escape`. One row per email. Never create or rename a column.
+  - id: confirm_emit
+    goal: >
+      Confirm the "COA test" table now shows a row for each PR (Source "GitHub PR") and each
+      invoice email (Source "Invoice"). Emit a JSON object with keys: prs (a list of
+      {number, title, author} for the PRs you logged — number as digits, no '#'),
+      invoices (a list of {sender, subject} for the invoice emails you logged),
+      notion_pr_rows_added (integer count of PR rows you created),
+      notion_invoice_rows_added (integer count of invoice rows you created).

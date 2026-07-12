@@ -132,14 +132,16 @@ the agent's open-ended autonomy into deterministic, scored flows across applicat
 | File | Role |
 |---|---|
 | [runner.py](runner.py) | Drives a YAML playbook step-by-step through the agent loop; measures per-step tokens/time/actions; runs the oracle; writes a `runs.db` row + `final_report.json`. |
-| [flows/loader.py](flows/loader.py) · [flows/](flows/) | Spec validation + the playbooks (`tradingview.yaml` browser flow, `proton.yaml` no-API flow). |
-| [oracles/](oracles/) | One verifier per flow — `tradingview.py` (**machine**: independent quote, ±0.5%), `proton.py` (**human**: approval gate). |
-| [metrics_db.py](metrics_db.py) · [pricing.py](pricing.py) | SQLite store (`runs`/`step_metrics`/`feedback`) · verified `claude-sonnet-4-6` `$/MTok` cost. |
+| [flows/loader.py](flows/loader.py) · [flows/](flows/) | Spec validation + the playbooks (`tradingview.yaml` browser flow, `github_pr.yaml` multi-app flow, `proton.yaml` no-API flow). |
+| [oracles/](oracles/) | One verifier per flow — `tradingview.py` (**machine**: independent quote, ±0.5%), `github_pr.py` (**machine + human**: GitHub API machine-verifies every PR the agent read/logged; the Notion rows + invoice-email classification are human-gated — no Notion key needed), `proton.py` (**human**: approval gate). |
+| [metrics_db.py](metrics_db.py) · [pricing.py](pricing.py) | SQLite store (`runs`/`step_metrics`/`feedback`) · verified `$/MTok` cost; default `claude-sonnet-4-6`, with `claude-sonnet-5` also priced (intro rates through 2026-08-31). |
 | [report.py](report.py) · [feedback.py](feedback.py) | `runs.db` → CLI table + [docs/results.html](docs/results.html) (pass% · $/run · $/success · tokens · steps · **time/run** · a per-flow **step/time variability** chart) · capture a human verdict (may override the oracle). |
 | [demo.sh](demo.sh) | Runs **both flows + report back-to-back** for a single screen recording (`--tradingview` / `--proton` / `--no-pause`). Runbook: [docs/DEMO.md](docs/DEMO.md). |
 
 ```bash
 python -u runner.py flows/tradingview.yaml   # browser flow, machine-scored
+python -u runner.py flows/github_pr.yaml     # multi-app flow: open PRs + Proton invoices → Notion
+                                             #   (open PRs on the repo first; no extra keys needed)
 python -u runner.py flows/proton.yaml         # no-API flow, human-gated (approval dialog)
 python report.py                              # regenerate docs/results.html
 python feedback.py <run_id> --pass --notes "…"
@@ -178,6 +180,7 @@ modes are in [docs/NOTES.md](docs/NOTES.md#risk-taxonomy).
 # the flows framework's offline suites also run standalone (no pytest needed):
 for t in tests/test_loader.py tests/test_pricing.py tests/test_metrics_db.py \
          tests/test_oracle_tradingview.py tests/test_oracle_proton.py \
+         tests/test_oracle_github_pr.py \
          tests/test_feedback.py tests/test_report.py; do python3 "$t"; done
 ```
 

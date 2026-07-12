@@ -57,6 +57,29 @@ def test_missing_name_raises():
     _expect(SpecError, d)
 
 
+def test_multi_app_type_is_accepted():
+    d = _valid(); d["app_type"] = "multi_app"
+    assert loader.validate(d).app_type == "multi_app"
+
+
+def test_real_github_pr_yaml_loads():
+    """Validates the shipped Flow #2 spec — skipped if PyYAML isn't installed."""
+    try:
+        import yaml  # noqa: F401
+    except ImportError:
+        print("SKIP test_real_github_pr_yaml_loads (PyYAML not installed)")
+        return
+    spec = loader.load(ROOT / "flows" / "github_pr.yaml")
+    assert spec.name == "github_notion_intake"
+    assert spec.app_type == "multi_app"
+    assert spec.oracle == "github_pr"
+    assert spec.model == "claude-sonnet-4-6"
+    assert spec.steps_expected == 8
+    assert spec.oracle_config["repo"] == "eshaanmathakari/sholay"
+    assert spec.emit_schema == ["prs", "invoices",
+                                "notion_pr_rows_added", "notion_invoice_rows_added"]
+
+
 def test_real_tradingview_yaml_loads():
     """Validates the shipped spec — skipped if PyYAML isn't installed."""
     try:

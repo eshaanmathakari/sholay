@@ -107,7 +107,15 @@ def execute_computer(action: str, **kw):
             pyautogui.mouseUp(button="left")
         elif action == "type": pyautogui.write(kw["text"], interval=0.03)
         elif action == "key":
-            keys = kw["text"].lower().replace("super", "command").split("+")
+            # Computer-use models emit Mac chords as "cmd+a", "cmd+c", etc. pyautogui
+            # needs "command" — an unmapped "cmd" is silently dropped, so "cmd+a" would
+            # type a bare "a" (breaking every shortcut). Normalize the common aliases.
+            _KEY_ALIAS = {
+                "cmd": "command", "super": "command", "win": "command", "meta": "command",
+                "control": "ctrl", "opt": "option", "alt": "option",
+                "esc": "escape", "del": "delete", "return": "enter",
+            }
+            keys = [_KEY_ALIAS.get(k, k) for k in kw["text"].lower().split("+")]
             pyautogui.hotkey(*keys) if len(keys) > 1 else pyautogui.press(keys[0])
         elif action == "hold_key":
             keys = kw["text"].lower().split("+"); dur = kw.get("duration", 1.0)
